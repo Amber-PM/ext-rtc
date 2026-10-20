@@ -1,0 +1,14 @@
+ARG_ENABLE("rtc", "rtc native bootstrap", "no");
+ARG_WITH("libdatachannel", "private pinned libdatachannel prefix", "no");
+
+if (PHP_RTC != "no") {
+	if (PHP_LIBDATACHANNEL == "no") {
+		ERROR("rtc requires --with-libdatachannel=PREFIX");
+	}
+	if (!CHECK_HEADER_ADD_INCLUDE("rtc/global.hpp", "CFLAGS_RTC", PHP_LIBDATACHANNEL + "\\include") ||
+		!CHECK_LIB("datachannel.lib", "rtc", PHP_LIBDATACHANNEL + "\\lib")) {
+		ERROR("rtc requires pinned libdatachannel headers and import library");
+	}
+	ADD_FLAG("CFLAGS_RTC", "/std:c++20 /EHsc /DZEND_ENABLE_STATIC_TSRMLS_CACHE=1 /DRTC_ENABLE_MEDIA=0 /DRTC_ENABLE_WEBSOCKET=0");
+	EXTENSION("rtc", "src\\rtc.cpp src\\backend_info.cpp src\\runtime.cpp", true);
+}

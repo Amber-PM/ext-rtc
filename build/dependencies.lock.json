@@ -1,0 +1,101 @@
+{
+  "schema": 1,
+  "libdatachannel": {
+    "tag": "v0.24.6",
+    "commit": "6b1e2e620f1e37f0eafeee702eaea0043cb305fd",
+    "repository": "https://github.com/paullouisageneau/libdatachannel.git",
+    "submodules": {
+      "deps/json": "55f93686c01528224f448c19128836e7df245f72",
+      "deps/libjuice": "b89c792e3612faf2f12cf35bcc56857313a06be3",
+      "deps/libsrtp": "24b3bf8f19b6f5ab4cd2bcceb4f4064efca86fd5",
+      "deps/plog": "94899e0b926ac1b0f4750bfbd495167b4a6ae9ef",
+      "deps/usrsctp": "fec583d54493f879d2ae44a743423bf8a04371ab"
+    }
+  },
+  "openssl": {
+    "version": "3.5.5",
+    "repository": "https://github.com/openssl/openssl.git",
+    "commit": "67b5686b4419b4cb8caa502711c41815f5279751",
+    "policy": "Require this exact existing development library; record resolved libraries and hashes per build. No global installs."
+  },
+  "cmake": {
+    "BUILD_SHARED_LIBS": "ON",
+    "BUILD_SHARED_DEPS_LIBS": "OFF",
+    "NO_MEDIA": "ON",
+    "NO_WEBSOCKET": "ON",
+    "NO_EXAMPLES": "ON",
+    "NO_TESTS": "ON",
+    "USE_GNUTLS": "OFF",
+    "USE_MBEDTLS": "OFF",
+    "USE_NICE": "OFF",
+    "USE_SYSTEM_JUICE": "OFF",
+    "USE_SYSTEM_USRSCTP": "OFF",
+    "USE_SYSTEM_PLOG": "OFF"
+  },
+  "windows": {
+    "architecture": "x64",
+    "runtime": "MultiThreadedDLL",
+    "opensslConfigureOptions": [
+      "no-asm"
+    ],
+    "phpSdk": {
+      "repository": "https://github.com/php/php-sdk-binary-tools.git",
+      "tag": "php-sdk-2.8.1",
+      "commit": "85d4305ebf942724b69c5f64bba244da689366f8"
+    },
+    "phpSourceRepository": "https://github.com/php/php-src.git",
+    "phpRuntimeBaseUrl": "https://downloads.php.net/~windows/releases/archives",
+    "targets": {
+      "8.1.34": {
+        "versionId": 80134,
+        "phpApi": "20210902",
+        "extensionBuild": "API20210902,TS,VS16",
+        "sourceTag": "php-8.1.34",
+        "sourceCommit": "94abff74457effe4432f0bd49f5230aa11155dff",
+        "runtimeArchive": "php-8.1.34-Win32-vs16-x64.zip",
+        "runtimeSha256": "8e17e0804fe48d3a032c9bef16f0f922996e0b1b237061b7ce94485394db5d1b",
+        "visualStudio": "vs16",
+        "compiler": "Visual C++ 2019",
+        "toolsetMinMinor": 20,
+        "toolsetMaxMinor": 29,
+        "zts": true
+      },
+      "8.4.24": {
+        "versionId": 80424,
+        "phpApi": "20240924",
+        "extensionBuild": "API20240924,TS,VS17",
+        "sourceTag": "php-8.4.24",
+        "sourceCommit": "fb193d3df72d1ca3b5ef58ec9e9b6ef5bdf18bef",
+        "runtimeArchive": "php-8.4.24-Win32-vs17-x64.zip",
+        "runtimeSha256": "7b57fc9840273ab153834d0e2bd06e0bcf4fead36e381182b4b8fe9cedff3174",
+        "visualStudio": "vs17",
+        "compiler": "Visual C++ 2022",
+        "toolsetMinMinor": 30,
+        "toolsetMaxMinor": 49,
+        "zts": true
+      }
+    }
+  },
+  "buildTools": {
+    "linux": {
+      "re2c": {
+        "version": "3.1",
+        "packageVersion": "3.1-1build1",
+        "architecture": "amd64",
+        "archive": "re2c_3.1-1build1_amd64.deb",
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/r/re2c/re2c_3.1-1build1_amd64.deb",
+        "sha256": "418afd09a7abb6878ddec36b60cefb891a8066856a60b757fd0700e072652616"
+      }
+    }
+  },
+  "licenses": {
+    "ext-rtc": "MIT",
+    "libdatachannel": "MPL-2.0",
+    "libjuice": "MPL-2.0",
+    "usrsctp": "BSD-3-Clause",
+    "OpenSSL": "Apache-2.0",
+    "plog": "MIT",
+    "json": "MIT",
+    "libsrtp": "BSD-3-Clause (not built: NO_MEDIA=ON)"
+  }
+}
