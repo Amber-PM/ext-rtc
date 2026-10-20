@@ -19,6 +19,7 @@
 - Reliable and unreliable data transport *(planned)*.
 - Cross-platform support for Linux and Windows.
 - Runtime information, capability detection and statistics.
+- Experimental native PeerConnection answerer with SDP, ICE and observed DTLS fingerprints.
 - Automated native builds and tests through GitHub Actions.
 
 ## Compatibility
@@ -28,13 +29,11 @@
 | Linux | 8.1+ | x64, ZTS / NTS |
 | Windows | 8.1+ | x64, ZTS |
 
-PHP 8.1 and 8.4 builds have been validated through CI. Other versions and configurations may require additional validation.
+The build matrix targets PHP 8.1 and 8.4. Other versions and configurations require additional validation.
 
 ## Development Status
 
 **ext-rtc is under active development.**
-
-The current native bootstrap exposes runtime information and capability detection. WebRTC connections and DataChannels are not yet available for production use.
 
 ## License
 

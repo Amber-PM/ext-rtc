@@ -371,6 +371,7 @@ foreach($entry in @{
 	'CMAKE_POLICY_DEFAULT_CMP0091' = 'NEW'
 	'CMAKE_C_FLAGS_RELEASE' = '/MD /O2 /DNDEBUG'
 	'CMAKE_CXX_FLAGS_RELEASE' = '/MD /O2 /DNDEBUG'
+	'CMAKE_C_FLAGS' = '-DICE_MAX_CANDIDATES_COUNT=64'
 }.GetEnumerator()){
 	$cacheEntry = [regex]::Match($cmakeCache, '(?m)^' + [regex]::Escape($entry.Key) + ':[^=]*=([^\r\n]*)\r?$')
 	if(!$cacheEntry.Success -or $cacheEntry.Groups[1].Value -ne $entry.Value){

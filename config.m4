@@ -33,6 +33,7 @@ static_assert(RTC_VERSION_MAJOR == 0 && RTC_VERSION_MINOR == 24 && RTC_VERSION_P
   PHP_ADD_LIBPATH([$PHP_LIBDATACHANNEL/lib], [RTC_SHARED_LIBADD])
   RTC_SHARED_LIBADD="$RTC_SHARED_LIBADD -Wl,$PHP_LIBDATACHANNEL/lib/libdatachannel.so"
   PHP_ADD_LIBRARY([stdc++], [1], [RTC_SHARED_LIBADD])
+  PHP_ADD_LIBRARY([dl], [1], [RTC_SHARED_LIBADD])
   PHP_SUBST([RTC_SHARED_LIBADD])
-  PHP_NEW_EXTENSION([rtc], [src/rtc.cpp src/backend_info.cpp src/runtime.cpp], [$ext_shared],, [-std=c++20 -DZEND_ENABLE_STATIC_TSRMLS_CACHE=1 -DRTC_ENABLE_MEDIA=0 -DRTC_ENABLE_WEBSOCKET=0], [cxx])
+  PHP_NEW_EXTENSION([rtc], [src/rtc.cpp src/backend_info.cpp src/runtime.cpp src/peer.cpp src/transport.cpp src/values.cpp src/peer_bindings.cpp], [$ext_shared],, [-std=c++20 -DZEND_ENABLE_STATIC_TSRMLS_CACHE=1 -DRTC_ENABLE_MEDIA=0 -DRTC_ENABLE_WEBSOCKET=0], [cxx])
 fi

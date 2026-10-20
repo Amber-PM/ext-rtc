@@ -20,6 +20,7 @@
 #include "../php_rtc.h"
 #include "backend_info.h"
 #include "runtime.h"
+#include "peer.h"
 #include <exception>
 
 extern "C" {
@@ -33,6 +34,7 @@ PHP_MINIT_FUNCTION(rtc){
 			return FAILURE;
 		}
 		amber::rtc::register_runtime();
+		amber::rtc::register_transport();
 		return SUCCESS;
 	}catch(const std::exception&){
 		php_error_docref(nullptr, E_WARNING, "libdatachannel linkage probe threw");
@@ -44,6 +46,15 @@ PHP_MINIT_FUNCTION(rtc){
 }
 
 PHP_MSHUTDOWN_FUNCTION(rtc){
+	if(!amber::rtc::shutdown_peers()){
+		php_error_docref(nullptr, E_WARNING, "SHUTDOWN_FAILURE: RTC cleanup failed");
+		return FAILURE;
+	}
+	return SUCCESS;
+}
+
+PHP_RSHUTDOWN_FUNCTION(rtc){
+	amber::rtc::shutdown_request();
 	return SUCCESS;
 }
 
@@ -76,7 +87,7 @@ zend_module_entry rtc_module_entry = {
 	PHP_MINIT(rtc),
 	PHP_MSHUTDOWN(rtc),
 	nullptr,
-	nullptr,
+	PHP_RSHUTDOWN(rtc),
 	PHP_MINFO(rtc),
 	PHP_RTC_VERSION,
 	STANDARD_MODULE_PROPERTIES

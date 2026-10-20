@@ -19,6 +19,7 @@
     "policy": "Require this exact existing development library; record resolved libraries and hashes per build. No global installs."
   },
   "cmake": {
+    "CMAKE_C_FLAGS": "-DICE_MAX_CANDIDATES_COUNT=64",
     "BUILD_SHARED_LIBS": "ON",
     "BUILD_SHARED_DEPS_LIBS": "OFF",
     "NO_MEDIA": "ON",

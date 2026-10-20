@@ -19,6 +19,7 @@
 
 #include "../php_rtc.h"
 #include "runtime.h"
+#include "peer.h"
 
 namespace amber::rtc {
 
@@ -55,17 +56,17 @@ PHP_METHOD(RtcRuntime, getCapabilities){
 	ZEND_PARSE_PARAMETERS_NONE();
 	array_init_size(return_value, 6);
 	add_assoc_bool(return_value, "nativeBootstrap", true);
-	add_assoc_bool(return_value, "peerConnection", false);
+	add_assoc_bool(return_value, "peerConnection", true);
 	add_assoc_bool(return_value, "dataChannels", false);
-	add_assoc_bool(return_value, "trickleIce", false);
-	add_assoc_bool(return_value, "observedRemoteFingerprint", false);
+	add_assoc_bool(return_value, "trickleIce", true);
+	add_assoc_bool(return_value, "observedRemoteFingerprint", true);
 	add_assoc_bool(return_value, "media", false);
 }
 
 PHP_METHOD(RtcRuntime, getStats){
 	ZEND_PARSE_PARAMETERS_NONE();
 	array_init_size(return_value, 5);
-	add_assoc_long(return_value, "activePeers", 0);
+	add_assoc_long(return_value, "activePeers", static_cast<zend_long>(active_peers()));
 	add_assoc_long(return_value, "activeChannels", 0);
 	add_assoc_long(return_value, "managedBufferBytes", 0);
 	add_assoc_long(return_value, "receiveOverflowCount", 0);

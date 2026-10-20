@@ -53,6 +53,7 @@ foreach($j["libdatachannel"]["submodules"] as $path=>$sha){
 if git -C "$source_dir" submodule foreach --recursive 'git diff --quiet && git diff --cached --quiet' >/dev/null; then :; else fail "modified submodule"; fi
 cmake -S "$source_dir" -B "$build_dir/backend" -G Ninja \
 	-DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$prefix" -DCMAKE_INSTALL_LIBDIR=lib \
+	-DCMAKE_C_FLAGS=-DICE_MAX_CANDIDATES_COUNT=64 \
 	-DOPENSSL_ROOT_DIR="$ssl_prefix" -DOPENSSL_USE_STATIC_LIBS=OFF \
 	-DCMAKE_INSTALL_RPATH="$prefix/lib;$ssl_prefix/lib;$ssl_prefix/lib64" \
 	-DBUILD_SHARED_LIBS=ON -DBUILD_SHARED_DEPS_LIBS=OFF \

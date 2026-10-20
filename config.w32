@@ -10,5 +10,6 @@ if (PHP_RTC != "no") {
 		ERROR("rtc requires pinned libdatachannel headers and import library");
 	}
 	ADD_FLAG("CFLAGS_RTC", "/std:c++20 /EHsc /DZEND_ENABLE_STATIC_TSRMLS_CACHE=1 /DRTC_ENABLE_MEDIA=0 /DRTC_ENABLE_WEBSOCKET=0");
-	EXTENSION("rtc", "src\\rtc.cpp src\\backend_info.cpp src\\runtime.cpp", true);
+	CHECK_LIB("ws2_32.lib", "rtc");
+	EXTENSION("rtc", "src\\rtc.cpp src\\backend_info.cpp src\\runtime.cpp src\\peer.cpp src\\transport.cpp src\\values.cpp src\\peer_bindings.cpp", true);
 }
