@@ -97,14 +97,25 @@ $referenceIdentity | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Pa
 & (Join-Path $root 'tests/build/php-identity.ps1') -PhpExe $referencePhp 2>&1 | Tee-Object -FilePath (Join-Path $logs 'php-identity-regression.log')
 if($LASTEXITCODE -ne 0){ throw 'PHP ABI mismatch regression failed' }
 & $referencePhp -n (Join-Path $root 'tests/contract/check.php') 2>&1 | Tee-Object -FilePath (Join-Path $logs 'contract-check.log')
-if($LASTEXITCODE -ne 0){ throw 'S0 contract check failed under the target Windows PHP runtime' }
+if($LASTEXITCODE -ne 0){ throw 'API contract check failed under the target Windows PHP runtime' }
 
 $originalPath = $env:PATH
 $originalInteraction = $env:NO_INTERACTION
 $originalReport = $env:REPORT_EXIT_STATUS
 $originalTestPhp = $env:TEST_PHP_EXECUTABLE
+$originalOfferer = $env:RTC_TEST_OFFERER
 try{
 	$env:PATH = $phpRelease + [IO.Path]::PathSeparator + (Join-Path $buildPath 'reference-runtime') + [IO.Path]::PathSeparator + $originalPath
+	$nativeDirectory = Join-Path $buildPath 'native-tests'
+	$backendPrefix = Split-Path (Split-Path $backend -Parent) -Parent
+	$nativeToolset = if($PhpVersion -eq '8.1.34'){ 'v142' }else{ 'v143' }
+	& cmake -S (Join-Path $root 'tests/native') -B $nativeDirectory -G 'Visual Studio 17 2022' -A x64 -T $nativeToolset -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL "-DCMAKE_PREFIX_PATH=$backendPrefix"
+	if($LASTEXITCODE -ne 0){ throw 'Native transport harness configuration failed' }
+	& cmake --build $nativeDirectory --config Release --parallel 2
+	if($LASTEXITCODE -ne 0){ throw 'Native transport harness build failed' }
+	$env:RTC_TEST_OFFERER = Join-Path $nativeDirectory 'Release/rtc-offerer.exe'
+	& ctest --test-dir $nativeDirectory -C Release --output-on-failure
+	if($LASTEXITCODE -ne 0){ throw 'Native transport lifecycle failed' }
 	foreach($runtime in @($builtPhp, $referencePhp)){
 		$output = & $runtime -n -d "extension=$module" --ri rtc 2>&1
 		$status = $LASTEXITCODE
@@ -134,6 +145,7 @@ try{
 	if($null -eq $originalInteraction){ Remove-Item Env:NO_INTERACTION -ErrorAction SilentlyContinue }else{ $env:NO_INTERACTION = $originalInteraction }
 	if($null -eq $originalReport){ Remove-Item Env:REPORT_EXIT_STATUS -ErrorAction SilentlyContinue }else{ $env:REPORT_EXIT_STATUS = $originalReport }
 	if($null -eq $originalTestPhp){ Remove-Item Env:TEST_PHP_EXECUTABLE -ErrorAction SilentlyContinue }else{ $env:TEST_PHP_EXECUTABLE = $originalTestPhp }
+	if($null -eq $originalOfferer){ Remove-Item Env:RTC_TEST_OFFERER -ErrorAction SilentlyContinue }else{ $env:RTC_TEST_OFFERER = $originalOfferer }
 }
 
 Write-Output "PASS: Windows PHP $PhpVersion module load, $expected PHPT cases, and 100 lifecycle processes"

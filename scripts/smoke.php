@@ -16,6 +16,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/test-process.php';
+
 $module = isset($argv[1]) ? realpath($argv[1]) : false;
 if($module === false || !is_file($module)){
 	fwrite(STDERR, "Usage: php -n scripts/smoke.php ABSOLUTE_MODULE_PATH\n");
@@ -24,23 +26,25 @@ if($module === false || !is_file($module)){
 $worker = <<<'PHP'
 if(!extension_loaded('rtc') || phpversion('rtc') !== '0.1.0-dev'){ exit(2); }
 $c = \amber\rtc\RtcRuntime::getCapabilities();
-if($c !== ['nativeBootstrap'=>true,'peerConnection'=>false,'dataChannels'=>false,'trickleIce'=>false,'observedRemoteFingerprint'=>false,'media'=>false]){ exit(3); }
+if($c !== ['nativeBootstrap'=>true,'peerConnection'=>true,'dataChannels'=>false,'trickleIce'=>true,'observedRemoteFingerprint'=>true,'media'=>false]){ exit(3); }
 if(\amber\rtc\RtcRuntime::getStats() !== ['activePeers'=>0,'activeChannels'=>0,'managedBufferBytes'=>0,'receiveOverflowCount'=>0,'sendRejectedCount'=>0]){ exit(4); }
-if(\amber\rtc\RtcRuntime::getApiVersion() !== 1 || class_exists('amber\\rtc\\PeerConnection', false)){ exit(5); }
+if(\amber\rtc\RtcRuntime::getApiVersion() !== 1 || !class_exists('amber\\rtc\\PeerConnection', false)){ exit(5); }
+$peer = new \amber\rtc\PeerConnection(\amber\rtc\PeerConnectionOptions::create());
+if(\amber\rtc\RtcRuntime::getStats()['activePeers'] !== 1){ exit(6); }
+$peer->close(); unset($peer);
+$unclosed = new \amber\rtc\PeerConnection(\amber\rtc\PeerConnectionOptions::create());
 echo "OK\n";
 PHP;
 for($i = 0; $i < 100; ++$i){
 	$pipes = [];
-	$process = proc_open([PHP_BINARY, '-n', '-d', 'extension=' . $module, '-r', $worker], [0=>['pipe','r'],1=>['pipe','w'],2=>['pipe','w']], $pipes);
+	[$process, $pipes] = startTestProcess([PHP_BINARY, '-n', '-d', 'extension=' . $module, '-r', $worker]);
 	if(!is_resource($process)){ throw new RuntimeException('Unable to start smoke child'); }
 	fclose($pipes[0]);
-	stream_set_blocking($pipes[1], false);
-	stream_set_blocking($pipes[2], false);
 	$out = $err = '';
 	$deadline = hrtime(true) + 10_000_000_000;
 	do{
-		$out .= stream_get_contents($pipes[1]);
-		$err .= stream_get_contents($pipes[2]);
+		$out .= processOutput($pipes[1]);
+		$err .= processOutput($pipes[2]);
 		$status = proc_get_status($process);
 		if(!$status['running']){ break; }
 		if(hrtime(true) >= $deadline){
@@ -52,8 +56,8 @@ for($i = 0; $i < 100; ++$i){
 		}
 		usleep(10000);
 	}while(true);
-	$out .= stream_get_contents($pipes[1]);
-	$err .= stream_get_contents($pipes[2]);
+	$out .= processOutput($pipes[1]);
+	$err .= processOutput($pipes[2]);
 	fclose($pipes[1]);
 	fclose($pipes[2]);
 	$closedCode = proc_close($process);

@@ -1,5 +1,5 @@
 --TEST--
-rtc does not register nonfunctional transport APIs
+rtc registers transport without exposing data channels
 --FILE--
 <?php
 /*
@@ -19,13 +19,12 @@ rtc does not register nonfunctional transport APIs
 
 declare(strict_types=1);
 $extension = new ReflectionExtension('rtc');
-var_dump($extension->getClassNames() === ['amber\rtc\RtcRuntime']);
+$classes = $extension->getClassNames(); sort($classes);
+$expected = array_map(fn($n) => 'amber\\rtc\\'.$n, ['RtcRuntime','PeerConnection','PeerConnectionOptions','IceServer','IceCandidate','RtcException','ConnectionState','GatheringState']); sort($expected);
+var_dump($classes === $expected);
 var_dump($extension->getFunctions() === []);
-foreach(['PeerConnection', 'DataChannel', 'PeerConnectionOptions', 'DataChannelOptions', 'IceServer', 'IceCandidate', 'RtcException'] as $name){
+foreach(['DataChannel', 'DataChannelOptions'] as $name){
 	if(class_exists('amber\\rtc\\' . $name, false)){ throw new RuntimeException("unexpected $name"); }
-}
-foreach(['ConnectionState', 'GatheringState'] as $name){
-	if(enum_exists('amber\\rtc\\' . $name, false)){ throw new RuntimeException("unexpected $name"); }
 }
 try{ new amber\rtc\RtcRuntime(); }catch(Error $e){ echo "construction rejected\n"; }
 var_dump($extension->getINIEntries() === []);

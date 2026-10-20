@@ -21,6 +21,11 @@ cd "$root"
 expected="$(find tests -maxdepth 1 -type f -name '*.phpt' -print | wc -l | tr -d '[:space:]')"
 ((expected > 0)) || { echo 'rtc tests: no PHPT files found' >&2; exit 1; }
 mkdir -p "$build_dir/logs"
+native_dir="$build_dir/native-tests"
+cmake -S "$root/tests/native" -B "$native_dir" -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="${RTC_TEST_BACKEND_PREFIX:-$build_dir/install}"
+cmake --build "$native_dir" --parallel 2
+export RTC_TEST_OFFERER="$native_dir/rtc-offerer"
+ctest --test-dir "$native_dir" --output-on-failure
 phpt_log="$build_dir/logs/phpt.log"
 runner="$build_dir/run-tests.php"
 if [[ ! -f "$runner" ]]; then
