@@ -38,8 +38,10 @@ int main(){
 			std::array<std::shared_ptr<Channel>,4> local,remote;
 			for(unsigned i=0;i<4;++i){local[i]=a->create_channel(std::to_string(i),{});}
 			wait([&]{a->snapshot();std::lock_guard lock(a->mutex);return a->gathering==::rtc::PeerConnection::GatheringState::Complete;},"gathering a");
+			a->snapshot();
 			b->remote(*a->localDescription,true);
 			wait([&]{b->snapshot();std::lock_guard lock(b->mutex);return b->gathering==::rtc::PeerConnection::GatheringState::Complete;},"gathering b");
+			b->snapshot();
 			a->remote(*b->localDescription,false);
 			size_t adopted=0;
 			wait([&]{for(auto c:b->poll_channels()){remote[std::stoul(c->label)]=c;++adopted;}return adopted==4 && local[0]->is_open() && local[1]->is_open() && local[2]->is_open() && local[3]->is_open();},"channel open");

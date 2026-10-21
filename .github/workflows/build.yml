@@ -132,6 +132,9 @@ jobs:
             .build/windows/${{ matrix.php }}/selected-toolset.txt
             .build/windows/${{ matrix.php }}/backend/CMakeCache.txt
             .build/windows/${{ matrix.php }}/logs/
+            .build/windows/${{ matrix.php }}/native-tests/CMakeFiles/CMakeConfigureLog.yaml
+            .build/windows/${{ matrix.php }}/native-tests/CMakeFiles/*.log
+            .build/windows/${{ matrix.php }}/native-tests/Testing/Temporary/
             .build/windows/${{ matrix.php }}/source/php-src/x64/Release_TS/**/php_rtc.dll
             .build/windows/${{ matrix.php }}/source/php-src/x64/Release_TS/datachannel.dll
             .build/windows/${{ matrix.php }}/source/php-src/x64/Release_TS/libcrypto-3-x64.dll
