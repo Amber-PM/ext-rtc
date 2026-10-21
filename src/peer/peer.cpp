@@ -14,6 +14,8 @@
  */
 
 #include "peer.h"
+#include "../channel/channel.h"
+#include "../core/dispatcher.h"
 #include <algorithm>
 #include <cctype>
 #include <rtc/global.hpp>
@@ -192,16 +194,24 @@ void validate_options(const Options& o){
 
 std::shared_ptr<Peer> Peer::create(const Options& options){
 	validate_options(options);
+	start_dispatcher();
 	std::call_once(backendRetained, [] { retain_library(reinterpret_cast<const void*>(&::rtc::Preload)); });
+	ManagedCharge allocation(sizeof(Peer) + 64 + 64 * sizeof(std::pair<std::string, std::string>) +
+		16 * sizeof(std::shared_ptr<Channel>));
 	auto self = std::make_shared<Peer>();
+	self->allocation.swap(allocation);
+	self->queues = make_queues();
 	self->options = options;
 	auto config = options.config;
 	config.disableAutoNegotiation = true;
-	config.maxMessageSize = options.message;
+	// backend truncation must remain distinguishable from an allowed payload
+	// DCEP also needs room for two 65535-byte strings and its 12-byte header
+	config.maxMessageSize = (std::max)(options.message + 1, size_t{131083});
 	// peer construction acquires the backend token before the bind probe on windows
 	self->backend = std::make_shared<::rtc::PeerConnection>(config);
 	validate_bind(config);
 	self->candidates.reserve(64);
+	self->pendingChannels.reserve(16);
 	std::weak_ptr<Peer> weak = self;
 	self->backend->onStateChange([weak](auto state) noexcept {
 		if(auto p = weak.lock()){
@@ -252,19 +262,19 @@ std::shared_ptr<Peer> Peer::create(const Options& options){
 			}
 		}
 	});
-	// incoming channels are closed because the payload api is unavailable
 	self->backend->onDataChannel([weak](auto channel) noexcept {
 		try{
-			channel->close();
-		} catch(...){
 			if(auto p = weak.lock()){
-				std::lock_guard lock(p->mutex);
-				if(!p->closed){
-					p->state = ::rtc::PeerConnection::State::Failed;
-					p->failure = p->state;
-				}
+				Channel::attach(p, channel, true);
+			} else{
+				channel->close();
 			}
-			++cleanupFailures;
+		} catch(...){
+			try{
+				channel->close();
+			} catch(...){
+				++cleanupFailures;
+			}
 		}
 	});
 	requestPeers.erase(std::remove_if(requestPeers.begin(), requestPeers.end(), [](auto& p){ return p.expired(); }),
@@ -475,6 +485,8 @@ void Peer::add(const std::string& candidate, const std::string& mid){
 
 void Peer::close(){
 	std::lock_guard operation(operations);
+	std::array<std::shared_ptr<Channel>, 16> children;
+	std::vector<std::shared_ptr<Channel>> pending;
 	{
 		std::lock_guard lock(mutex);
 		if(closed){
@@ -492,19 +504,32 @@ void Peer::close(){
 	{
 		std::lock_guard lock(mutex);
 		closed = true;
+		dispatchStopped = true;
 		state = ::rtc::PeerConnection::State::Closed;
 		candidates.clear();
+		children.swap(channels);
+		pending.swap(pendingChannels);
 	}
 	if(admitted){
 		--active;
 		admitted = false;
 	}
 	// backend close may synchronously deliver callbacks
+	for(auto& channel : children){
+		if(channel){
+			channel->close_safely();
+		}
+	}
 	auto pc = std::move(backend);
 	if(pc){
-		pc->resetCallbacks();
-		pc->close();
+		try{
+			pc->resetCallbacks();
+			pc->close();
+		} catch(...){
+			snapshotFailed = true;
+		}
 	}
+	purge_sends();
 	if(snapshotFailed){
 		throw Error(11, "Final peer snapshot failed during close");
 	}

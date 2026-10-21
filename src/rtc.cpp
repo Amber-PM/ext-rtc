@@ -18,9 +18,10 @@
 #endif
 
 #include "../php_rtc.h"
-#include "backend_info.h"
-#include "runtime.h"
-#include "peer.h"
+#include "backend/backend_info.h"
+#include "zend/runtime.h"
+#include "peer/peer.h"
+#include "core/dispatcher.h"
 #include <exception>
 
 extern "C" {
@@ -30,7 +31,7 @@ extern "C" {
 PHP_MINIT_FUNCTION(rtc){
 	try{
 		if(!amber::rtc::backend_probe()){
-			php_error_docref(nullptr, E_WARNING, "libdatachannel linkage probe failed");
+			php_error_docref(nullptr, E_WARNING, "libdatachannel identity or message lifetime linkage probe failed");
 			return FAILURE;
 		}
 		amber::rtc::register_runtime();
@@ -46,6 +47,7 @@ PHP_MINIT_FUNCTION(rtc){
 }
 
 PHP_MSHUTDOWN_FUNCTION(rtc){
+	amber::rtc::stop_dispatcher();
 	if(!amber::rtc::shutdown_peers()){
 		php_error_docref(nullptr, E_WARNING, "SHUTDOWN_FAILURE: RTC cleanup failed");
 		return FAILURE;
@@ -65,6 +67,7 @@ PHP_MINFO_FUNCTION(rtc){
 	php_info_print_table_row(2, "API version", "1");
 	php_info_print_table_row(2, "Compiled libdatachannel version", amber::rtc::backend_version());
 	php_info_print_table_row(2, "libdatachannel commit", PHP_RTC_BACKEND_COMMIT);
+	php_info_print_table_row(2, "Loaded libdatachannel identity", amber::rtc::backend_identity());
 	php_info_print_table_row(2, "Media", "disabled (NO_MEDIA=ON)");
 	php_info_print_table_row(2, "PHP API", ZEND_TOSTR(PHP_API_VERSION));
 #ifdef ZTS

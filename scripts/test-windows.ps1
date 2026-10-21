@@ -96,6 +96,8 @@ $referenceIdentity | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Pa
 
 & (Join-Path $root 'tests/build/php-identity.ps1') -PhpExe $referencePhp 2>&1 | Tee-Object -FilePath (Join-Path $logs 'php-identity-regression.log')
 if($LASTEXITCODE -ne 0){ throw 'PHP ABI mismatch regression failed' }
+& $referencePhp -n (Join-Path $root 'scripts/quality.php') 2>&1 | Tee-Object -FilePath (Join-Path $logs 'quality.log')
+if($LASTEXITCODE -ne 0){ throw 'Source quality/inventory check failed' }
 & $referencePhp -n (Join-Path $root 'tests/contract/check.php') 2>&1 | Tee-Object -FilePath (Join-Path $logs 'contract-check.log')
 if($LASTEXITCODE -ne 0){ throw 'API contract check failed under the target Windows PHP runtime' }
 
@@ -104,6 +106,7 @@ $originalInteraction = $env:NO_INTERACTION
 $originalReport = $env:REPORT_EXIT_STATUS
 $originalTestPhp = $env:TEST_PHP_EXECUTABLE
 $originalOfferer = $env:RTC_TEST_OFFERER
+$originalModule = $env:RTC_TEST_MODULE
 try{
 	$env:PATH = $phpRelease + [IO.Path]::PathSeparator + (Join-Path $buildPath 'reference-runtime') + [IO.Path]::PathSeparator + $originalPath
 	$nativeDirectory = Join-Path $buildPath 'native-tests'
@@ -113,6 +116,7 @@ try{
 	if($LASTEXITCODE -ne 0){ throw 'Native transport harness configuration failed' }
 	& cmake --build $nativeDirectory --config Release --parallel 2
 	if($LASTEXITCODE -ne 0){ throw 'Native transport harness build failed' }
+	$env:RTC_TEST_MODULE = $module
 	$env:RTC_TEST_OFFERER = Join-Path $nativeDirectory 'Release/rtc-offerer.exe'
 	& ctest --test-dir $nativeDirectory -C Release --output-on-failure
 	if($LASTEXITCODE -ne 0){ throw 'Native transport lifecycle failed' }
@@ -145,6 +149,7 @@ try{
 	if($null -eq $originalInteraction){ Remove-Item Env:NO_INTERACTION -ErrorAction SilentlyContinue }else{ $env:NO_INTERACTION = $originalInteraction }
 	if($null -eq $originalReport){ Remove-Item Env:REPORT_EXIT_STATUS -ErrorAction SilentlyContinue }else{ $env:REPORT_EXIT_STATUS = $originalReport }
 	if($null -eq $originalTestPhp){ Remove-Item Env:TEST_PHP_EXECUTABLE -ErrorAction SilentlyContinue }else{ $env:TEST_PHP_EXECUTABLE = $originalTestPhp }
+	if($null -eq $originalModule){ Remove-Item Env:RTC_TEST_MODULE -ErrorAction SilentlyContinue }else{ $env:RTC_TEST_MODULE = $originalModule }
 	if($null -eq $originalOfferer){ Remove-Item Env:RTC_TEST_OFFERER -ErrorAction SilentlyContinue }else{ $env:RTC_TEST_OFFERER = $originalOfferer }
 }
 

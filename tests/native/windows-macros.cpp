@@ -13,7 +13,7 @@
  *
  */
 
-#include "../../src/peer.h"
+#include "../../src/peer/peer.h"
 #include <rtc/global.hpp>
 #include <algorithm>
 #include <cctype>
@@ -27,4 +27,4 @@
 #ifndef max
 #define max(a, b) (((a) > (b)) ? (a) : (b))
 #endif
-#include "../../src/peer.cpp"
+#include "../../src/peer/peer.cpp"

@@ -9,7 +9,29 @@ if (PHP_RTC != "no") {
 		!CHECK_LIB("datachannel.lib", "rtc", PHP_LIBDATACHANNEL + "\\lib")) {
 		ERROR("rtc requires pinned libdatachannel headers and import library");
 	}
+	if (!CHECK_HEADER_ADD_INCLUDE("rtc/ext_rtc_backend.h", "CFLAGS_RTC", PHP_LIBDATACHANNEL + "\\include")) {
+		ERROR("rtc requires the patched backend identity header");
+	}
+	var rtcProbeBase = FSO.BuildPath(FSO.GetSpecialFolder(2), FSO.GetTempName());
+	var rtcProbeSource = rtcProbeBase + ".cpp";
+	var rtcProbeFile = FSO.CreateTextFile(rtcProbeSource, true);
+	rtcProbeFile.WriteLine('#include <rtc/datachannel.hpp>');
+	rtcProbeFile.WriteLine('#include <rtc/ext_rtc_backend.h>');
+	rtcProbeFile.WriteLine('#include <rtc/version.h>');
+	rtcProbeFile.WriteLine('static_assert(RTC_VERSION_MAJOR == 0 && RTC_VERSION_MINOR == 24 && RTC_VERSION_PATCH == 6);');
+	rtcProbeFile.WriteLine('using Send = bool (rtc::DataChannel::*)(const rtc::byte *, size_t, std::shared_ptr<void>);');
+	rtcProbeFile.WriteLine('Send volatile lifetimeSend = static_cast<Send>(&rtc::DataChannel::send);');
+	rtcProbeFile.WriteLine('int main() { return !lifetimeSend || !rtcExtMessageLifetimeIdentity(); }');
+	rtcProbeFile.Close();
+	var rtcProbeStatus = WshShell.Run('cl.exe /nologo /std:c++20 /EHsc /MD /DRTC_ENABLE_MEDIA=0 /DRTC_ENABLE_WEBSOCKET=0 /I"' + PHP_LIBDATACHANNEL + '\\include" "' + rtcProbeSource + '" /Fo"' + rtcProbeBase + '.obj" /Fe"' + rtcProbeBase + '.exe" /link "' + PHP_LIBDATACHANNEL + '\\lib\\datachannel.lib"', 0, true);
+	var rtcProbeSuffixes = [".cpp", ".obj", ".exe"];
+	for (var rtcProbeIndex = 0; rtcProbeIndex < rtcProbeSuffixes.length; rtcProbeIndex++) {
+		if (FSO.FileExists(rtcProbeBase + rtcProbeSuffixes[rtcProbeIndex])) FSO.DeleteFile(rtcProbeBase + rtcProbeSuffixes[rtcProbeIndex]);
+	}
+	if (rtcProbeStatus != 0) {
+		ERROR("rtc requires linkable libdatachannel 0.24.6 with message-lifetime overload and identity symbol");
+	}
 	ADD_FLAG("CFLAGS_RTC", "/std:c++20 /EHsc /DZEND_ENABLE_STATIC_TSRMLS_CACHE=1 /DRTC_ENABLE_MEDIA=0 /DRTC_ENABLE_WEBSOCKET=0");
 	CHECK_LIB("ws2_32.lib", "rtc");
-	EXTENSION("rtc", "src\\rtc.cpp src\\backend_info.cpp src\\runtime.cpp src\\peer.cpp src\\transport.cpp src\\values.cpp src\\peer_bindings.cpp", true);
+	EXTENSION("rtc", "src\\rtc.cpp src\\core\\buffers.cpp src\\core\\dispatcher.cpp src\\peer\\peer.cpp src\\channel\\channel.cpp src\\channel\\send.cpp src\\channel\\receive.cpp src\\backend\\backend_info.cpp src\\zend\\runtime.cpp src\\zend\\values.cpp src\\zend\\transport.cpp src\\zend\\peer_bindings.cpp src\\zend\\channel_bindings.cpp", true);
 }

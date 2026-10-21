@@ -1,0 +1,26 @@
+--- a/include/rtc/datachannel.hpp
++++ b/include/rtc/datachannel.hpp
+@@ -42,6 +42,7 @@
+ 	void close(void) override;
+ 	bool send(message_variant data) override;
+ 	bool send(const byte *data, size_t size) override;
++	bool send(const byte *data, size_t size, shared_ptr<void> lifetime);
+ 	template <typename Buffer> bool sendBuffer(const Buffer &buf);
+ 	template <typename Iterator> bool sendBuffer(Iterator first, Iterator last);
+ 
+--- a/src/datachannel.cpp
++++ b/src/datachannel.cpp
+@@ -54,4 +54,13 @@
+ 	return impl()->outgoing(std::make_shared<Message>(data, data + size, Message::Binary));
+ }
+ 
++bool DataChannel::send(const byte *data, size_t size, shared_ptr<void> lifetime) {
++	auto message = message_ptr(new Message(data, data + size, Message::Binary),
++	    [lifetime = std::move(lifetime)](Message *message) mutable noexcept {
++		    delete message;
++		    lifetime.reset();
++	    });
++	return impl()->outgoing(std::move(message));
++}
++
+ } // namespace rtc

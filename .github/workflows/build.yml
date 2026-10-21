@@ -36,9 +36,16 @@ jobs:
           php="$PWD/.build/php-${{ matrix.php }}-${{ matrix.mode }}/install/bin"
           bash scripts/build-linux.sh --php "$php/php" --php-config "$php/php-config" --phpize "$php/phpize" --build-dir "$PWD/.build/rtc"
           bash tests/build/missing-backend.sh "$php/php" "$php/php-config" "$php/phpize" "$PWD/.build/rtc/install"
+          python3 tests/build/backend-patches.py "$PWD/.build/patch-tests" "$PWD/.build/rtc/libdatachannel"
       - name: PHPT and lifecycle
         shell: bash
         run: bash scripts/test-linux.sh "$PWD/.build/php-${{ matrix.php }}-${{ matrix.mode }}/install/bin/php" "$PWD/.build/rtc"
+      - name: Native ASan and UBSan
+        if: matrix.php == '8.4.24' && matrix.mode == 'nts'
+        shell: bash
+        env:
+          PKG_CONFIG_PATH: '${{ github.workspace }}/.build/openssl/lib/pkgconfig'
+        run: bash scripts/test-sanitizers-linux.sh "$PWD/.build/rtc" 2>&1 | tee .build/rtc/logs/sanitizers.log
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
@@ -49,6 +56,7 @@ jobs:
             .build/rtc/extension/modules/rtc.so
             .build/rtc/install/lib/*.so*
             .build/rtc/logs/
+            .build/rtc/sanitized-native/Testing/Temporary/
             .build/rtc/install/share/rtc/
             .build/openssl/lib/*.so*
             .build/php-${{ matrix.php }}-${{ matrix.mode }}/configure.log

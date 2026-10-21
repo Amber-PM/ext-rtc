@@ -38,12 +38,12 @@ mkdir -p "$build_dir/logs" "$build_dir/extension/src"
 prefix="$build_dir/install"
 source_dir="$build_dir/libdatachannel"
 if [[ ! -d "$source_dir/.git" ]]; then
-	git clone --branch "$(read_lock libdatachannel.tag)" "$(read_lock libdatachannel.repository)" "$source_dir"
+	git clone --depth 1 --branch "$(read_lock libdatachannel.tag)" "$(read_lock libdatachannel.repository)" "$source_dir"
 fi
 git -C "$source_dir" diff --quiet && git -C "$source_dir" diff --cached --quiet || fail "dependency sources have local changes"
 git -C "$source_dir" checkout --detach "$commit"
 [[ "$(git -C "$source_dir" rev-parse HEAD)" = "$commit" ]] || fail "backend revision mismatch"
-git -C "$source_dir" submodule update --init --recursive
+git -C "$source_dir" submodule update --init --recursive --depth 1
 "$php_bin" -n -r '
 $j=json_decode(file_get_contents($argv[1]),true,512,JSON_THROW_ON_ERROR);
 foreach($j["libdatachannel"]["submodules"] as $path=>$sha){
@@ -51,7 +51,9 @@ foreach($j["libdatachannel"]["submodules"] as $path=>$sha){
 	if($code!==0 || ($out[0]??null)!==$sha){fwrite(STDERR,"submodule revision mismatch: $path\n");exit(1);}
 }' "$lock" "$source_dir"
 if git -C "$source_dir" submodule foreach --recursive 'git diff --quiet && git diff --cached --quiet' >/dev/null; then :; else fail "modified submodule"; fi
-cmake -S "$source_dir" -B "$build_dir/backend" -G Ninja \
+patched_source="$build_dir/backend-source"
+cmake -DROOT="$root" -DSOURCE="$source_dir" -DDESTINATION="$patched_source" -P "$root/build/patches/prepare-backend.cmake"
+cmake -S "$patched_source" -B "$build_dir/backend" -G Ninja \
 	-DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$prefix" -DCMAKE_INSTALL_LIBDIR=lib \
 	-DCMAKE_C_FLAGS=-DICE_MAX_CANDIDATES_COUNT=64 \
 	-DOPENSSL_ROOT_DIR="$ssl_prefix" -DOPENSSL_USE_STATIC_LIBS=OFF \
@@ -62,8 +64,15 @@ cmake -S "$source_dir" -B "$build_dir/backend" -G Ninja \
 	-DUSE_SYSTEM_JUICE=OFF -DUSE_SYSTEM_USRSCTP=OFF -DUSE_SYSTEM_PLOG=OFF
 cmake --build "$build_dir/backend" --parallel 2
 cmake --install "$build_dir/backend"
+c++ -std=c++20 -DRTC_ENABLE_MEDIA=0 -DRTC_ENABLE_WEBSOCKET=0 -I"$prefix/include" \
+ "$root/build/patches/backend-probe.cpp" "$prefix/lib/libdatachannel.so" \
+ -Wl,-rpath,"$prefix/lib" -o "$build_dir/backend-probe"
+"$build_dir/backend-probe" || fail "patched backend identity/capability probe failed"
+ldd "$build_dir/backend-probe" > "$build_dir/logs/backend-probe-libraries.txt"
+probe_backend="$(awk '$1 == "libdatachannel.so.0.24" {print $3}' "$build_dir/logs/backend-probe-libraries.txt")"
+[[ -n "$probe_backend" && "$(realpath "$probe_backend")" = "$(realpath "$prefix/lib/libdatachannel.so")" ]] || fail "probe loaded backend outside verified prefix"
 cp "$root/config.m4" "$root/php_rtc.h" "$build_dir/extension/"
-cp "$root"/src/*.cpp "$root"/src/*.h "$build_dir/extension/src/"
+cp -R "$root/src/." "$build_dir/extension/src/"
 (
 	cd "$build_dir/extension"
 	"$phpize_bin"
@@ -85,6 +94,7 @@ mkdir -p "$prefix/share/rtc/licenses"
 cp "$root"/third-party/licenses/*.txt "$prefix/share/rtc/licenses/"
 cp "$root/LICENSE" "$prefix/share/rtc/ext-rtc-LICENSE"
 cp "$lock" "$prefix/share/rtc/dependencies.lock.json"
+cp -R "$root/build/patches" "$prefix/share/rtc/"
 cp "$root/third-party/NOTICES.md" "$prefix/share/rtc/NOTICES.md"
 runner="$("$php_config" --prefix)/lib/php/build/run-tests.php"
 if [[ ! -f "$runner" ]]; then runner="/usr/lib/php/$php_api/build/run-tests.php"; fi

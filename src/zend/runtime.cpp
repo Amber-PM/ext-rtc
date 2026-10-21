@@ -17,9 +17,10 @@
 #include "config.h"
 #endif
 
-#include "../php_rtc.h"
+#include "../../php_rtc.h"
 #include "runtime.h"
-#include "peer.h"
+#include "../peer/peer.h"
+#include "../channel/channel.h"
 
 namespace amber::rtc {
 
@@ -57,7 +58,7 @@ PHP_METHOD(RtcRuntime, getCapabilities){
 	array_init_size(return_value, 6);
 	add_assoc_bool(return_value, "nativeBootstrap", true);
 	add_assoc_bool(return_value, "peerConnection", true);
-	add_assoc_bool(return_value, "dataChannels", false);
+	add_assoc_bool(return_value, "dataChannels", true);
 	add_assoc_bool(return_value, "trickleIce", true);
 	add_assoc_bool(return_value, "observedRemoteFingerprint", true);
 	add_assoc_bool(return_value, "media", false);
@@ -66,16 +67,17 @@ PHP_METHOD(RtcRuntime, getCapabilities){
 PHP_METHOD(RtcRuntime, getStats){
 	ZEND_PARSE_PARAMETERS_NONE();
 	array_init_size(return_value, 5);
-	add_assoc_long(return_value, "activePeers", static_cast<zend_long>(active_peers()));
-	add_assoc_long(return_value, "activeChannels", 0);
-	add_assoc_long(return_value, "managedBufferBytes", 0);
-	add_assoc_long(return_value, "receiveOverflowCount", 0);
-	add_assoc_long(return_value, "sendRejectedCount", 0);
+	auto counter = [](size_t n){ return n > static_cast<size_t>(ZEND_LONG_MAX) ? ZEND_LONG_MAX : static_cast<zend_long>(n); };
+	add_assoc_long(return_value, "activePeers", counter(active_peers()));
+	add_assoc_long(return_value, "activeChannels", counter(active_channels()));
+	add_assoc_long(return_value, "managedBufferBytes", counter(managed_buffer_bytes()));
+	add_assoc_long(return_value, "receiveOverflowCount", counter(receive_overflow_count()));
+	add_assoc_long(return_value, "sendRejectedCount", counter(send_rejected_count()));
 }
 
 static const zend_function_entry runtime_methods[] = {
 	PHP_ME(RtcRuntime, __construct, arginfo_rtc_private, ZEND_ACC_PRIVATE)
-	PHP_ME(RtcRuntime, __clone, arginfo_rtc_void, ZEND_ACC_PRIVATE)
+	PHP_ME(RtcRuntime, __clone, arginfo_rtc_private, ZEND_ACC_PRIVATE)
 	PHP_ME(RtcRuntime, getVersion, arginfo_rtc_string, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
 	PHP_ME(RtcRuntime, getApiVersion, arginfo_rtc_int, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
 	PHP_ME(RtcRuntime, getCapabilities, arginfo_rtc_array, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)

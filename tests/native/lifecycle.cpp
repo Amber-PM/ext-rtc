@@ -13,7 +13,7 @@
  *
  */
 
-#include "../../src/peer.h"
+#include "../../src/peer/peer.h"
 #include <rtc/global.hpp>
 #include <chrono>
 #include <iostream>

@@ -1,0 +1,13 @@
+* text=auto
+*.sh text eol=lf
+*.cpp text eol=lf
+*.h text eol=lf
+*.php text eol=lf
+*.phpt text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.cmake text eol=lf
+config.m4 text eol=lf
+CMakeLists.txt text eol=lf
+# preserve reviewed dependency patch bytes
+build/patches/*.patch -text

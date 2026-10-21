@@ -17,6 +17,7 @@ php_bin="$1"
 build_dir="$2"
 module="$build_dir/extension/modules/rtc.so"
 cd "$root"
+"$php_bin" -n scripts/quality.php
 "$php_bin" -n tests/contract/check.php
 expected="$(find tests -maxdepth 1 -type f -name '*.phpt' -print | wc -l | tr -d '[:space:]')"
 ((expected > 0)) || { echo 'rtc tests: no PHPT files found' >&2; exit 1; }
@@ -24,6 +25,7 @@ mkdir -p "$build_dir/logs"
 native_dir="$build_dir/native-tests"
 cmake -S "$root/tests/native" -B "$native_dir" -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="${RTC_TEST_BACKEND_PREFIX:-$build_dir/install}"
 cmake --build "$native_dir" --parallel 2
+export RTC_TEST_MODULE="$module"
 export RTC_TEST_OFFERER="$native_dir/rtc-offerer"
 ctest --test-dir "$native_dir" --output-on-failure
 phpt_log="$build_dir/logs/phpt.log"
@@ -49,4 +51,5 @@ else
 	exit "$tee_status"
 fi
 "$php_bin" -n scripts/assert-phpt-summary.php "$expected" "$phpt_log"
+bash "$root/scripts/test-teardown-linux.sh" "$php_bin" "$build_dir"
 "$php_bin" -n scripts/smoke.php "$module"

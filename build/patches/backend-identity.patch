@@ -1,0 +1,38 @@
+--- /dev/null
++++ b/include/rtc/ext_rtc_backend.h
+@@ -0,0 +1,13 @@
++/* SPDX-License-Identifier: MPL-2.0 */
++#ifndef EXT_RTC_BACKEND_H
++#define EXT_RTC_BACKEND_H
++#include "rtc.h"
++#define EXT_RTC_BACKEND_IDENTITY "libdatachannel/0.24.6;commit=6b1e2e620f1e37f0eafeee702eaea0043cb305fd;message-lifetime=82a2c4c4e98eb5b5aa779edccaa7933ea15ad927cf51d410bf5f9f3b4d79891c"
++#ifdef __cplusplus
++extern "C" {
++#endif
++RTC_C_EXPORT const char *rtcExtMessageLifetimeIdentity(void);
++#ifdef __cplusplus
++}
++#endif
++#endif
+--- a/src/global.cpp
++++ b/src/global.cpp
+@@ -117,3 +117,9 @@
+ }
+ 
+ } // namespace rtc
++
++#include "ext_rtc_backend.h"
++
++extern "C" RTC_C_EXPORT const char *rtcExtMessageLifetimeIdentity(void) {
++	return EXT_RTC_BACKEND_IDENTITY;
++}
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -103,6 +103,7 @@
+ )
+ 
+ set(LIBDATACHANNEL_HEADERS
++	${CMAKE_CURRENT_SOURCE_DIR}/include/rtc/ext_rtc_backend.h
+ 	${CMAKE_CURRENT_SOURCE_DIR}/include/rtc/candidate.hpp
+ 	${CMAKE_CURRENT_SOURCE_DIR}/include/rtc/channel.hpp
+ 	${CMAKE_CURRENT_SOURCE_DIR}/include/rtc/configuration.hpp

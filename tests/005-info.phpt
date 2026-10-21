@@ -25,8 +25,10 @@ foreach(['Compiled libdatachannel version => 0.24.6', 'libdatachannel commit => 
 	var_dump(strpos($info, $needle) !== false);
 }
 var_dump((new ReflectionExtension('rtc'))->getVersion() === '0.1.0-dev');
+var_dump(strpos($info, 'Loaded libdatachannel identity => libdatachannel/0.24.6;commit=6b1e2e620f1e37f0eafeee702eaea0043cb305fd;message-lifetime=82a2c4c4e98eb5b5aa779edccaa7933ea15ad927cf51d410bf5f9f3b4d79891c') !== false);
 ?>
 --EXPECT--
+bool(true)
 bool(true)
 bool(true)
 bool(true)

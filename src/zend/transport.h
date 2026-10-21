@@ -18,8 +18,9 @@
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include "../php_rtc.h"
-#include "peer.h"
+#include "../../php_rtc.h"
+#include "../peer/peer.h"
+#include "../channel/channel.h"
 #include <cstring>
 extern "C" {
 #include "Zend/zend_enum.h"
@@ -29,7 +30,7 @@ extern "C" {
 
 namespace amber::rtc::php {
 extern zend_class_entry *exceptionClass, *optionsClass, *serverClass, *candidateClass, *peerClass, *stateClass,
-	*gatheringClass;
+	*gatheringClass, *channelClass, *channelOptionsClass;
 
 struct CandidateValue{
 	std::string candidate;
@@ -44,6 +45,11 @@ struct PeerValue{
 			peer->close_safely();
 		}
 	}
+};
+
+struct ChannelValue{
+	std::shared_ptr<Channel> channel;
+	~ChannelValue(){ if(channel){ channel->close_safely(); } }
 };
 
 struct Object{
@@ -70,6 +76,14 @@ inline CandidateValue& candidate_value(zval* zv){
 
 inline std::shared_ptr<Peer>& peer_value(zval* zv){
 	return static_cast<PeerValue*>(object(Z_OBJ_P(zv))->value)->peer;
+}
+
+inline ChannelOptions& channel_options_value(zval* zv){
+	return *static_cast<ChannelOptions*>(object(Z_OBJ_P(zv))->value);
+}
+
+inline std::shared_ptr<Channel>& channel_value(zval* zv){
+	return static_cast<ChannelValue*>(object(Z_OBJ_P(zv))->value)->channel;
 }
 
 void translate_exception();
@@ -109,4 +123,29 @@ PHP_METHOD(PeerConnection, pollLocalCandidates);
 PHP_METHOD(PeerConnection, addRemoteCandidate);
 PHP_METHOD(PeerConnection, getStats);
 PHP_METHOD(PeerConnection, close);
+}
+
+namespace amber::rtc {
+PHP_METHOD(DataChannelOptions, create);
+PHP_METHOD(DataChannelOptions, setUnordered);
+PHP_METHOD(DataChannelOptions, setMaxRetransmits);
+PHP_METHOD(DataChannelOptions, setMaxPacketLifeTime);
+PHP_METHOD(DataChannelOptions, setProtocol);
+PHP_METHOD(DataChannel, getLabel);
+PHP_METHOD(DataChannel, getProtocol);
+PHP_METHOD(DataChannel, isOpen);
+PHP_METHOD(DataChannel, isClosed);
+PHP_METHOD(DataChannel, isUnordered);
+PHP_METHOD(DataChannel, getMaxRetransmits);
+PHP_METHOD(DataChannel, getMaxPacketLifeTime);
+PHP_METHOD(DataChannel, getMaxMessageSize);
+PHP_METHOD(DataChannel, getBufferedAmount);
+PHP_METHOD(DataChannel, getAvailableAmount);
+PHP_METHOD(DataChannel, getQueuedMessageCount);
+PHP_METHOD(DataChannel, send);
+PHP_METHOD(DataChannel, peek);
+PHP_METHOD(DataChannel, receive);
+PHP_METHOD(DataChannel, close);
+PHP_METHOD(PeerConnection, createDataChannel);
+PHP_METHOD(PeerConnection, pollDataChannels);
 }

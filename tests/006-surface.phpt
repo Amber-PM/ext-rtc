@@ -1,5 +1,5 @@
 --TEST--
-rtc registers transport without exposing data channels
+rtc registers transport and native binary data channels
 --FILE--
 <?php
 /*
@@ -20,12 +20,9 @@ rtc registers transport without exposing data channels
 declare(strict_types=1);
 $extension = new ReflectionExtension('rtc');
 $classes = $extension->getClassNames(); sort($classes);
-$expected = array_map(fn($n) => 'amber\\rtc\\'.$n, ['RtcRuntime','PeerConnection','PeerConnectionOptions','IceServer','IceCandidate','RtcException','ConnectionState','GatheringState']); sort($expected);
+$expected = array_map(fn($n) => 'amber\\rtc\\'.$n, ['RtcRuntime','PeerConnection','PeerConnectionOptions','IceServer','IceCandidate','RtcException','ConnectionState','GatheringState','DataChannel','DataChannelOptions']); sort($expected);
 var_dump($classes === $expected);
 var_dump($extension->getFunctions() === []);
-foreach(['DataChannel', 'DataChannelOptions'] as $name){
-	if(class_exists('amber\\rtc\\' . $name, false)){ throw new RuntimeException("unexpected $name"); }
-}
 try{ new amber\rtc\RtcRuntime(); }catch(Error $e){ echo "construction rejected\n"; }
 var_dump($extension->getINIEntries() === []);
 ?>

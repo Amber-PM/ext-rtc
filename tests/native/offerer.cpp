@@ -16,6 +16,7 @@
 #include <rtc/rtc.hpp>
 #include <chrono>
 #include <iostream>
+#include <sstream>
 #include <thread>
 
 using namespace std::chrono_literals;
@@ -33,7 +34,7 @@ std::string hex(const std::string& input){
 }
 
 std::string unhex(const std::string& input){
-	if(input.size() % 2 || input.size() > 131072){
+	if(input.size() % 2 || input.size() > 524288){
 		throw std::runtime_error("invalid answer encoding");
 	}
 	auto nibble = [](char c){
@@ -54,7 +55,7 @@ std::string unhex(const std::string& input){
 }
 }
 
-int main(){
+int main(int argc, char** argv){
 	int result = 0;
 	try{
 		{
@@ -62,6 +63,18 @@ int main(){
 			config.disableAutoNegotiation = true;
 			auto peer = std::make_shared<rtc::PeerConnection>(config);
 			auto channel = peer->createDataChannel("transport-test");
+			std::vector<std::shared_ptr<rtc::DataChannel>> channels{channel};
+			const bool data = argc == 2 && std::string(argv[1]) == "--data";
+			if(data){
+				rtc::DataChannelInit init;
+				init.reliability.unordered = true;
+				init.reliability.maxRetransmits = 0;
+				init.protocol = "binary";
+				channels.push_back(peer->createDataChannel("unreliable-test", init));
+				init.reliability.maxRetransmits.reset();
+				init.reliability.maxPacketLifeTime = 25ms;
+				channels.push_back(peer->createDataChannel("timed-test", init));
+			}
 			peer->setLocalDescription(rtc::Description::Type::Offer);
 			auto deadline = std::chrono::steady_clock::now() + 10s;
 			while(peer->gatheringState() != rtc::PeerConnection::GatheringState::Complete){
@@ -85,7 +98,36 @@ int main(){
 					std::this_thread::sleep_for(10ms);
 				}
 				std::cout << "STATE " << peer->state() << std::endl;
-				std::getline(std::cin, answer);
+				while(std::getline(std::cin, answer) && answer != "CLOSE"){
+					std::istringstream command(answer);
+					std::string operation, payload;
+					size_t index;
+					if(!(command >> operation >> index) || index >= channels.size()){
+						throw std::runtime_error("invalid command");
+					}
+					auto selected = channels[index];
+					if(operation == "SEND"){
+						command >> payload;
+						auto bytes = unhex(payload);
+						auto end = std::chrono::steady_clock::now() + 10s;
+						while(!selected->isOpen()){
+							if(std::chrono::steady_clock::now() > end){ throw std::runtime_error("open deadline"); }
+							std::this_thread::sleep_for(2ms);
+						}
+						selected->send(reinterpret_cast<const std::byte*>(bytes.data()), bytes.size());
+						std::cout << "SENT" << std::endl;
+					} else if(operation == "RECEIVE"){
+						auto message = selected->receive();
+						if(message){
+							std::visit([](const auto& bytes){
+								std::cout << "DATA " << hex(std::string(reinterpret_cast<const char*>(bytes.data()), bytes.size())) << std::endl;
+							}, *message);
+						} else{ std::cout << "EMPTY" << std::endl; }
+					} else if(operation == "CLOSECHANNEL"){
+						selected->close();
+						std::cout << "CLOSED" << std::endl;
+					} else{ throw std::runtime_error("unknown command"); }
+				}
 			}
 			peer->resetCallbacks();
 			peer->close();

@@ -41,10 +41,10 @@ function readOffererLine($stream) : string{
 	return trim($line);
 }
 
-function offerer() : array{
+function offerer(bool $data = false) : array{
 	$binary = getenv('RTC_TEST_OFFERER');
 	check(is_string($binary) && is_file($binary), 'RTC_TEST_OFFERER must name the compiled native harness');
-	[$process, $pipes] = startTestProcess([$binary]);
+	[$process, $pipes] = startTestProcess($data ? [$binary, '--data'] : [$binary]);
 	register_shutdown_function(static function() use($process, $pipes){
 		if(!is_resource($process)){ return; }
 		if(is_resource($pipes[0])){ fclose($pipes[0]); }

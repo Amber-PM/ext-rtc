@@ -16,11 +16,16 @@
 #pragma once
 
 #include <atomic>
+#include <array>
 #include <mutex>
 #include <rtc/peerconnection.hpp>
 #include <stdexcept>
+#include "../core/buffers.h"
 
 namespace amber::rtc {
+
+struct Channel;
+struct ChannelOptions;
 
 struct Error : std::runtime_error{
 	int code;
@@ -44,6 +49,7 @@ void validate_candidate(const std::string& candidate, const std::string& mid);
 void validate_options(const Options& options);
 
 struct Peer : std::enable_shared_from_this<Peer>{
+	ManagedCharge allocation;
 	static std::shared_ptr<Peer> create(const Options& options);
 	~Peer();
 	void remote(const std::string& sdp, bool offer);
@@ -52,6 +58,18 @@ struct Peer : std::enable_shared_from_this<Peer>{
 	void close();
 	void close_safely() noexcept;
 	void require_open() const;
+	std::shared_ptr<Channel> create_channel(const std::string& label, const ChannelOptions& options);
+	std::vector<std::shared_ptr<Channel>> poll_channels();
+	std::array<std::shared_ptr<Channel>, 16> channels;
+	std::vector<std::shared_ptr<Channel>> pendingChannels;
+	std::shared_ptr<Queues> queues;
+	void service() noexcept;
+	void dispatch_sends();
+	void purge_sends() noexcept;
+	std::atomic<bool> dispatchStopped{false};
+	Peer* dispatchNext = nullptr;
+	std::shared_ptr<Peer> dispatchHold;
+	std::chrono::steady_clock::time_point dispatchAt;
 	Options options;
 	std::shared_ptr<::rtc::PeerConnection> backend;
 	// remote failure closes recursively, and close takes a final snapshot

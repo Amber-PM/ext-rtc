@@ -11,7 +11,7 @@ mkdir -p "$dir/headers-only" "$dir/extension/src"
 if [[ ! -e "$dir/headers-only/include" ]]; then ln -s "$prefix/include" "$dir/headers-only/include"; fi
 [[ "$(readlink -f "$dir/headers-only/include")" = "$(readlink -f "$prefix/include")" ]]
 cp "$root/config.m4" "$root/php_rtc.h" "$dir/extension/"
-cp "$root"/src/*.cpp "$root"/src/*.h "$dir/extension/src/"
+cp -R "$root/src/." "$dir/extension/src/"
 cd "$dir/extension"
 "$phpize_bin" > "$dir/phpize.log" 2>&1
 set +e
@@ -19,5 +19,5 @@ LIBRARY_PATH="$prefix/lib" ./configure --enable-rtc --with-libdatachannel="$dir/
 code=$?
 set -e
 if [[ "$code" -eq 0 ]]; then echo 'FAIL: missing backend library was accepted' >&2; exit 1; fi
-grep -q 'rtc requires linkable libdatachannel 0.24.6 with its exported probe symbol' "$dir/configure.log"
+grep -q 'rtc requires linkable libdatachannel 0.24.6 with its message-lifetime overload and identity symbol' "$dir/configure.log"
 echo "PASS: headers-only backend rejected (configure exit=$code)"

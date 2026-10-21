@@ -19,18 +19,20 @@ rtc reflection matches the frozen stub signatures
 
 
 declare(strict_types=1);
-$stub=file_get_contents(__DIR__.'/../stubs/rtc.stub.php');
+$stub=file_get_contents(__DIR__.'/../stubs/rtc.stub.php').file_get_contents(__DIR__.'/../stubs/runtime.stub.php');
 $count=0;
 $codes=['INVALID_ARGUMENT','CLOSED','INVALID_STATE','INVALID_SDP','SDP_TOO_LARGE','PAYLOAD_TOO_LARGE','CANDIDATE_LIMIT','CHANNEL_LIMIT','RECEIVE_OVERFLOW','BUFFER_BUDGET','BACKEND_FAILURE','SHUTDOWN_FAILURE'];
 foreach($codes as $i=>$code){ if(constant('amber\\rtc\\RtcException::'.$code)!==$i+1){ throw new RuntimeException('exception code'); } }
 if(array_map(fn($c)=>$c->name,amber\rtc\ConnectionState::cases())!==['NEW','CONNECTING','CONNECTED','DISCONNECTED','FAILED','CLOSED']){ throw new RuntimeException('connection states'); }
 if(array_map(fn($c)=>$c->name,amber\rtc\GatheringState::cases())!==['NEW','IN_PROGRESS','COMPLETE']){ throw new RuntimeException('gathering states'); }
-foreach(['PeerConnectionOptions','IceServer','IceCandidate','PeerConnection'] as $class){
+foreach(['PeerConnectionOptions','IceServer','IceCandidate','PeerConnection','DataChannelOptions','DataChannel','RtcRuntime'] as $class){
 	preg_match('/final class '.$class.'\{(.*?)\n\}/s',$stub,$block);
+	$reflection=new ReflectionClass('amber\\rtc\\'.$class);
+	if(!$reflection->isFinal()){throw new RuntimeException('non-final class');}
+	foreach(['__construct','__clone'] as $private){if(str_contains($block[1],'private function '.$private) && (!$reflection->getMethod($private)->isPrivate() || $reflection->getMethod($private)->hasReturnType())){throw new RuntimeException('private signature');}}
 	preg_match_all('/public (static )?function (\w+)\((.*?)\)(?: : ([?\w]+))?/',$block[1],$methods,PREG_SET_ORDER);
 	foreach($methods as $match){
 		[, $static,$name,$args]=$match;
-		if(in_array($name,['createDataChannel','pollDataChannels'],true)){ continue; }
 		$r=new ReflectionMethod('amber\\rtc\\'.$class,$name);
 		if(!$r->isInternal() || $r->isStatic()!==($static!=='')){ throw new RuntimeException($class.'::'.$name.' flags'); }
 		$return=isset($match[4])?$match[4]:'';
@@ -54,7 +56,7 @@ foreach(['PeerConnectionOptions','IceServer','IceCandidate','PeerConnection'] as
 		++$count;
 	}
 }
-if($count!==31){ throw new RuntimeException('signature coverage '.$count); }
+if($count!==57){ throw new RuntimeException('signature coverage '.$count); }
 echo "transport reflection OK\n";
 ?>
 --EXPECT--

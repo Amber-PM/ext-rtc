@@ -15,7 +15,13 @@
 
 #pragma once
 
+#include <memory>
+#include <chrono>
+
 namespace amber::rtc {
-const char* backend_version() noexcept;
-bool backend_probe();
+struct Peer;
+void start_dispatcher();
+void stop_dispatcher() noexcept;
+void schedule(const std::shared_ptr<Peer>& peer) noexcept;
+void schedule_after(const std::shared_ptr<Peer>& peer, std::chrono::milliseconds delay) noexcept;
 }

@@ -26,10 +26,12 @@ if($module === false || !is_file($module)){
 $worker = <<<'PHP'
 if(!extension_loaded('rtc') || phpversion('rtc') !== '0.1.0-dev'){ exit(2); }
 $c = \amber\rtc\RtcRuntime::getCapabilities();
-if($c !== ['nativeBootstrap'=>true,'peerConnection'=>true,'dataChannels'=>false,'trickleIce'=>true,'observedRemoteFingerprint'=>true,'media'=>false]){ exit(3); }
+if($c !== ['nativeBootstrap'=>true,'peerConnection'=>true,'dataChannels'=>true,'trickleIce'=>true,'observedRemoteFingerprint'=>true,'media'=>false]){ exit(3); }
 if(\amber\rtc\RtcRuntime::getStats() !== ['activePeers'=>0,'activeChannels'=>0,'managedBufferBytes'=>0,'receiveOverflowCount'=>0,'sendRejectedCount'=>0]){ exit(4); }
 if(\amber\rtc\RtcRuntime::getApiVersion() !== 1 || !class_exists('amber\\rtc\\PeerConnection', false)){ exit(5); }
 $peer = new \amber\rtc\PeerConnection(\amber\rtc\PeerConnectionOptions::create());
+$channel = $peer->createDataChannel('smoke');
+if(!$channel instanceof \amber\rtc\DataChannel){ exit(7); }
 if(\amber\rtc\RtcRuntime::getStats()['activePeers'] !== 1){ exit(6); }
 $peer->close(); unset($peer);
 $unclosed = new \amber\rtc\PeerConnection(\amber\rtc\PeerConnectionOptions::create());

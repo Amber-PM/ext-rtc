@@ -17,7 +17,7 @@
 
 namespace amber::rtc::php {
 zend_class_entry *exceptionClass, *optionsClass, *serverClass, *candidateClass, *peerClass, *stateClass,
-	*gatheringClass;
+	*gatheringClass, *channelClass, *channelOptionsClass;
 
 void translate_exception(){
 	try{
@@ -106,6 +106,8 @@ void register_transport(){
 	optionsClass = register_class<Options>("PeerConnectionOptions", PeerConnectionOptions_methods);
 	serverClass = register_class<std::optional<::rtc::IceServer>>("IceServer", IceServer_methods);
 	candidateClass = register_class<CandidateValue>("IceCandidate", IceCandidate_methods);
+	channelOptionsClass = register_class<ChannelOptions>("DataChannelOptions", DataChannelOptions_methods);
+	channelClass = register_class<ChannelValue>("DataChannel", DataChannel_methods);
 	peerClass = register_class<PeerValue>("PeerConnection", PeerConnection_methods);
 }
 }

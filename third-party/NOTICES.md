@@ -9,3 +9,11 @@
 | OpenSSL | 3.5.5; upstream source 67b5686b4419b4cb8caa502711c41815f5279751 | shared TLS/crypto dependency | Apache-2.0 |
 | json | 55f93686c01528224f448c19128836e7df245f72 | recorded submodule, WebSocket disabled | MIT |
 | libsrtp | 24b3bf8f19b6f5ab4cd2bcceb4f4064efca86fd5 | recorded but not built, media disabled | BSD-3-Clause |
+
+The distributed libdatachannel is **0.24.6 + ext-rtc message-lifetime patch**,
+not unmodified upstream. `build/dependencies.lock.json` records its upstream
+commit and SHA-256 for `build/patches/backend.patch` and the separate additive
+`backend-identity.patch`. Both backend modifications are MPL-2.0. The packaging
+helpers and capability probe are MIT. Distributions retain these patches,
+this notice, and the upstream license files so the modified source can be
+reconstructed from the pinned public repository and its locked submodules.

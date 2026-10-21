@@ -19,13 +19,21 @@ rtc bootstrap advertises only implemented features
 
 declare(strict_types=1);
 var_dump(amber\rtc\RtcRuntime::getCapabilities() === [
-	'nativeBootstrap' => true, 'peerConnection' => true, 'dataChannels' => false,
+	'nativeBootstrap' => true, 'peerConnection' => true, 'dataChannels' => true,
 	'trickleIce' => true, 'observedRemoteFingerprint' => true, 'media' => false
 ]);
 $c = amber\rtc\RtcRuntime::getCapabilities();
 $c['peerConnection'] = false;
 var_dump(amber\rtc\RtcRuntime::getCapabilities()['peerConnection']);
+$c['dataChannels'] = false;
+var_dump(amber\rtc\RtcRuntime::getCapabilities()['dataChannels']);
+$peer = new amber\rtc\PeerConnection(amber\rtc\PeerConnectionOptions::create());
+$channel = $peer->createDataChannel('capability');
+var_dump($channel instanceof amber\rtc\DataChannel);
+$peer->close();
 ?>
 --EXPECT--
+bool(true)
+bool(true)
 bool(true)
 bool(true)

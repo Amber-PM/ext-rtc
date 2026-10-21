@@ -15,7 +15,10 @@
 
 #include "backend_info.h"
 #include <rtc/global.hpp>
+#include <rtc/datachannel.hpp>
+#include <rtc/ext_rtc_backend.h>
 #include <rtc/version.h>
+#include <cstring>
 #include <sstream>
 
 #if RTC_ENABLE_MEDIA
@@ -26,11 +29,20 @@
 #endif
 
 namespace amber::rtc {
+namespace {
+bool (::rtc::DataChannel::*volatile lifetime_send)(const ::rtc::byte*, size_t, std::shared_ptr<void>) = &::rtc::DataChannel::send;
+}
 const char* backend_version() noexcept{
 	return RTC_VERSION;
 }
 
+const char* backend_identity() noexcept{
+	return ::rtcExtMessageLifetimeIdentity();
+}
+
 bool backend_probe(){
+	const auto* identity = backend_identity();
+	if(!lifetime_send || !identity || std::strcmp(identity, expected_backend_identity) != 0){ return false; }
 	std::ostringstream output;
 	::rtc::operator<<(output, ::rtc::LogLevel::Warning);
 	return output.str() == "warning";

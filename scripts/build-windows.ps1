@@ -1,9 +1,9 @@
 #
-#  _____ __  _______   ____ _____ ____  
-# | ____|\ \/ /_   _| |  _ \_   _/ ___| 
-# |  _|   \  /  | |   | |_) || || |     
-# | |___ /  \  | |   |  _ < | || |___   
-# |_____/_/\_\ |_|   |_| \_\|_| \____|  
+#  _____ __  _______   ____ _____ ____
+# | ____|\ \/ /_   _| |  _ \_   _/ ___|
+# |  _|   \  /  | |   | |_) || || |
+# | |___ /  \  | |   |  _ < | || |___
+# |_____/_/\_\ |_|   |_| \_\|_| \____|
 #
 # Copyright (c) 2026 Amber-PM contributors
 # SPDX-License-Identifier: MIT
@@ -294,7 +294,7 @@ Sync-LockedRepository -Name 'openssl' -Repository $lock.openssl.repository -Comm
 Sync-LockedRepository -Name 'libdatachannel' -Repository $lock.libdatachannel.repository -Commit $lock.libdatachannel.commit -Destination $backendSource
 $backendTagCommit = Get-GitValue -Arguments @('-C', $backendSource, 'rev-parse', "$($lock.libdatachannel.tag)^{commit}")
 if($backendTagCommit -ne $lock.libdatachannel.commit){ throw "libdatachannel tag $($lock.libdatachannel.tag) no longer points to the locked commit" }
-[void](Invoke-Logged -Program 'git.exe' -Arguments @('-C', $backendSource, 'submodule', 'update', '--init', '--recursive') -Label 'libdatachannel submodules' -LogPath (Join-Path $logs 'submodules-update.log'))
+[void](Invoke-Logged -Program 'git.exe' -Arguments @('-C', $backendSource, 'submodule', 'update', '--init', '--recursive', '--depth', '1') -Label 'libdatachannel submodules' -LogPath (Join-Path $logs 'submodules-update.log'))
 foreach($entry in $lock.libdatachannel.submodules.GetEnumerator()){
 	$actual = Get-GitValue -Arguments @('-C', (Join-Path $backendSource $entry.Key), 'rev-parse', 'HEAD')
 	if($actual -ne $entry.Value){ throw "libdatachannel submodule pin mismatch at $($entry.Key): expected $($entry.Value), got $actual" }
@@ -302,6 +302,9 @@ foreach($entry in $lock.libdatachannel.submodules.GetEnumerator()){
 $submoduleStatus = Get-GitValue -Arguments @('-C', $backendSource, 'submodule', 'status', '--recursive')
 $submoduleStatus | Set-Content -LiteralPath (Join-Path $logs 'submodules.txt') -Encoding utf8
 [void](Invoke-Logged -Program 'git.exe' -Arguments @('-C', $backendSource, 'submodule', 'foreach', '--recursive', 'git diff --quiet && git diff --cached --quiet') -Label 'submodule cleanliness check' -LogPath (Join-Path $logs 'submodules-clean.log'))
+
+$patchedBackendSource = Join-Path $buildPath 'source/libdatachannel-patched'
+[void](Invoke-Logged -Program 'cmake.exe' -Arguments @("-DROOT=$root", "-DSOURCE=$backendSource", "-DDESTINATION=$patchedBackendSource", '-P', (Join-Path $root 'build/patches/prepare-backend.cmake')) -Label 'Verified private backend patch preparation' -LogPath (Join-Path $logs 'backend-patches.log'))
 
 New-Item -ItemType Directory -Path (Join-Path $buildPath 'source') -Force | Out-Null
 $opensslInstall = Join-Path $prefix 'openssl'
@@ -347,7 +350,7 @@ $backendBuild = Join-Path $buildPath 'backend'
 $backendFlags = @()
 foreach($entry in $lock.cmake.GetEnumerator()){ $backendFlags += "-D$($entry.Key)=$($entry.Value)" }
 $cmakeArgs = @(
-	'-S', $backendSource,
+	'-S', $patchedBackendSource,
 	'-B', $backendBuild,
 	'-G', 'NMake Makefiles',
 	"-DCMAKE_INSTALL_PREFIX=$backendInstall",
@@ -402,9 +405,25 @@ foreach($flag in $lock.cmake.GetEnumerator()){
 	}
 }
 
+$probeExe = Join-Path $backendInstall 'bin/ext-rtc-backend-probe.exe'
+[void](Invoke-Logged -Program 'cl.exe' -Arguments @('/nologo', '/std:c++20', '/EHsc', '/MD', '/DRTC_ENABLE_MEDIA=0', '/DRTC_ENABLE_WEBSOCKET=0', "/I$backendInstall/include", (Join-Path $root 'build/patches/backend-probe.cpp'), "/Fo$backendBuild/backend-probe.obj", "/Fe$probeExe", '/link', $backendImport) -Label 'Backend lifetime overload compile and link probe' -LogPath (Join-Path $logs 'backend-probe-build.log'))
+$probePath = $env:PATH
+try{
+ $env:PATH = (Join-Path $opensslInstall 'bin') + [IO.Path]::PathSeparator + $probePath
+ [void](Invoke-Logged -Program $probeExe -Arguments @($backendDll) -Label 'Backend runtime path and identity probe' -LogPath (Join-Path $logs 'backend-probe-run.log'))
+}finally{ $env:PATH = $probePath }
+
 $extension = Join-Path $phpSource 'ext/rtc'
-New-Item -ItemType Directory -Path (Join-Path $extension 'src') -Force | Out-Null
-Get-ChildItem -LiteralPath (Join-Path $root 'src') -File | Where-Object { $_.Extension -in @('.cpp', '.h') } | Copy-Item -Destination (Join-Path $extension 'src') -Force
+$srcRoot = Join-Path $root 'src'
+Get-ChildItem -LiteralPath $srcRoot -Recurse -File | Where-Object { $_.Extension -in @('.cpp', '.h') } | ForEach-Object {
+	$rel = $_.FullName.Substring($srcRoot.Length).TrimStart([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+	$dest = Join-Path $extension (Join-Path 'src' $rel)
+	$destDir = Split-Path -Path $dest -Parent
+	if(!(Test-Path -LiteralPath $destDir)){
+		New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+	}
+	Copy-Item -LiteralPath $_.FullName -Destination $dest -Force
+}
 foreach($name in @('php_rtc.h', 'config.w32')){
 	Copy-Item -LiteralPath (Join-Path $root $name) -Destination $extension -Force
 }
@@ -500,6 +519,7 @@ $submoduleStatus | Set-Content -LiteralPath (Join-Path $logs 'submodules.txt') -
 
 $notices = Join-Path $buildPath 'notices'
 New-Item -ItemType Directory -Path $notices -Force | Out-Null
+Copy-Item -LiteralPath (Join-Path $root 'build/patches') -Destination $notices -Recurse -Force
 Copy-Item -LiteralPath (Join-Path $root 'third-party/licenses') -Destination $notices -Recurse -Force
 foreach($name in @('LICENSE', 'build/dependencies.lock.json', 'third-party/NOTICES.md')){
 	Copy-Item -LiteralPath (Join-Path $root $name) -Destination $notices -Force

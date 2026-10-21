@@ -10,7 +10,19 @@
       "deps/libsrtp": "24b3bf8f19b6f5ab4cd2bcceb4f4064efca86fd5",
       "deps/plog": "94899e0b926ac1b0f4750bfbd495167b4a6ae9ef",
       "deps/usrsctp": "fec583d54493f879d2ae44a743423bf8a04371ab"
-    }
+    },
+    "distribution": "0.24.6 + ext-rtc message-lifetime patch",
+    "identity": "libdatachannel/0.24.6;commit=6b1e2e620f1e37f0eafeee702eaea0043cb305fd;message-lifetime=82a2c4c4e98eb5b5aa779edccaa7933ea15ad927cf51d410bf5f9f3b4d79891c",
+    "patches": [
+      {
+        "path": "build/patches/backend.patch",
+        "sha256": "82a2c4c4e98eb5b5aa779edccaa7933ea15ad927cf51d410bf5f9f3b4d79891c"
+      },
+      {
+        "path": "build/patches/backend-identity.patch",
+        "sha256": "52a8138f5dd045a576c28da2f3e3ae8407d1964182ca730a3b7a012fdfe1f2a5"
+      }
+    ]
   },
   "openssl": {
     "version": "3.5.5",

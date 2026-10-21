@@ -15,9 +15,8 @@
 ## Features
 
 - Native C++20 implementation.
-- WebRTC DataChannel support *(in development)*.
-- Reliable and unreliable data transport *(planned)*.
-- Cross-platform support for Linux and Windows.
+- Experimental WebRTC DataChannels with reliable and unreliable transport.
+- Native build and test targets for Linux and Windows.
 - Runtime information, capability detection and statistics.
 - Experimental native PeerConnection answerer with SDP, ICE and observed DTLS fingerprints.
 - Automated native builds and tests through GitHub Actions.
