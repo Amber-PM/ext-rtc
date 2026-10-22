@@ -13,7 +13,7 @@
 
 [CmdletBinding()]
 param(
-	[Parameter(Mandatory = $true)][ValidateSet('8.1.34', '8.4.24')][string]$PhpVersion,
+	[Parameter(Mandatory = $true)][ValidateSet('8.4.27', '8.5.12')][string]$PhpVersion,
 	[Parameter(Mandatory = $true)][string]$BuildDirectory,
 	[switch]$InsidePhpSdk,
 	[switch]$PreflightOnly

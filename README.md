@@ -25,10 +25,10 @@
 
 | Platform | PHP | Architecture |
 |---|---|---|
-| Linux | 8.1+ | x64, ZTS / NTS |
-| Windows | 8.1+ | x64, ZTS |
+| Linux | 8.4.27, 8.5.12 | x64, ZTS / NTS |
+| Windows | 8.4.27, 8.5.12 | x64, ZTS |
 
-The build matrix targets PHP 8.1 and 8.4. Other versions and configurations require additional validation.
+The build matrix targets PHP 8.4.27 (old stable) and PHP 8.5.12 (current stable), both from the 2026-10-21 security releases. The previous PHP 8.1.34 and 8.4.24 targets are retired and no longer built or tested. Other versions and configurations require additional validation.
 
 ## Development Status
 

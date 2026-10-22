@@ -13,7 +13,7 @@
 
 [CmdletBinding()]
 param(
-	[Parameter(Mandatory = $true)][ValidateSet('8.1.34', '8.4.24')][string]$PhpVersion,
+	[Parameter(Mandatory = $true)][ValidateSet('8.4.27', '8.5.12')][string]$PhpVersion,
 	[Parameter(Mandatory = $true)][string]$BuildDirectory
 )
 
@@ -111,7 +111,7 @@ try{
 	$env:PATH = $phpRelease + [IO.Path]::PathSeparator + (Join-Path $buildPath 'reference-runtime') + [IO.Path]::PathSeparator + $originalPath
 	$nativeDirectory = Join-Path $buildPath 'native-tests'
 	$backendPrefix = Split-Path (Split-Path $backend -Parent) -Parent
-	$nativeToolset = if($PhpVersion -eq '8.1.34'){ 'v142' }else{ 'v143' }
+	$nativeToolset = 'v143'
 	& cmake -S (Join-Path $root 'tests/native') -B $nativeDirectory -G 'Visual Studio 17 2022' -A x64 -T $nativeToolset -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL "-DCMAKE_PREFIX_PATH=$backendPrefix"
 	if($LASTEXITCODE -ne 0){ throw 'Native transport harness configuration failed' }
 	& cmake --build $nativeDirectory --config Release --parallel 2

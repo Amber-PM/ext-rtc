@@ -90,6 +90,7 @@ size_t active_peers();
 size_t cleanup_failures();
 void shutdown_request() noexcept;
 bool shutdown_peers() noexcept;
+bool shutdown_backend() noexcept;
 void retain_library(const void* address);
 void register_transport();
 }

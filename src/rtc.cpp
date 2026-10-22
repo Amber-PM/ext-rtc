@@ -52,6 +52,10 @@ PHP_MSHUTDOWN_FUNCTION(rtc){
 		php_error_docref(nullptr, E_WARNING, "SHUTDOWN_FAILURE: RTC cleanup failed");
 		return FAILURE;
 	}
+	if(!amber::rtc::shutdown_backend()){
+		php_error_docref(nullptr, E_WARNING, "SHUTDOWN_FAILURE: RTC backend cleanup did not finish");
+		return FAILURE;
+	}
 	return SUCCESS;
 }
 

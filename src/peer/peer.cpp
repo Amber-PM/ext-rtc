@@ -37,6 +37,7 @@ namespace {
 std::atomic<size_t> active{0};
 std::atomic<size_t> cleanupFailures{0};
 std::once_flag backendRetained;
+std::atomic<bool> backendStarted{false};
 thread_local std::vector<std::weak_ptr<Peer>> requestPeers;
 
 bool numeric_ip(const std::string& ip){
@@ -196,6 +197,7 @@ std::shared_ptr<Peer> Peer::create(const Options& options){
 	validate_options(options);
 	start_dispatcher();
 	std::call_once(backendRetained, [] { retain_library(reinterpret_cast<const void*>(&::rtc::Preload)); });
+	backendStarted = true;
 	ManagedCharge allocation(sizeof(Peer) + 64 + 64 * sizeof(std::pair<std::string, std::string>) +
 		16 * sizeof(std::shared_ptr<Channel>));
 	auto self = std::make_shared<Peer>();
@@ -313,6 +315,12 @@ void Peer::snapshot(){
 		return;
 	}
 	auto description = backend->localDescription();
+	// sctp keeps the larger internal limit for dcep and truncation checks, peers only learn the admitted size
+	if(description){
+		if(auto* application = description->application()){
+			application->setMaxMessageSize(options.message);
+		}
+	}
 	auto fp = backend->remoteFingerprint();
 	auto local = backend->localAddress(), remote = backend->remoteAddress();
 	auto bytesSent = backend->bytesSent(), bytesReceived = backend->bytesReceived();
@@ -555,5 +563,23 @@ void shutdown_request() noexcept {
 bool shutdown_peers() noexcept {
 	// backend globals may belong to another extension sharing the library
 	return active.load() == 0 && cleanupFailures.load() == 0;
+}
+
+bool shutdown_backend() noexcept {
+	if(!backendStarted.load()){
+		return true;
+	}
+	// the backend keeps a global token, so pool tasks like certificate generation
+	// can still use openssl while exit runs OPENSSL_cleanup
+	try{
+		auto cleanup = ::rtc::Cleanup();
+		if(cleanup.wait_for(std::chrono::seconds{10}) != std::future_status::ready){
+			return false;
+		}
+		cleanup.get();
+		return true;
+	} catch(...){
+		return false;
+	}
 }
 }
