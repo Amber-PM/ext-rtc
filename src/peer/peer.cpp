@@ -18,6 +18,7 @@
 #include "../core/dispatcher.h"
 #include <algorithm>
 #include <cctype>
+#include <map>
 #include <rtc/global.hpp>
 #include <sstream>
 #include <thread>
@@ -67,41 +68,111 @@ bool clean(const std::string& value){
 	return std::none_of(value.begin(), value.end(), [](unsigned char c){ return c <= 32 || c == 127; });
 }
 
+// mirrors libjuice: an empty address is a dual-stack wildcard, falling back to IPv4
+bool udp_bindable(const std::string& ip, uint16_t port){
+	bool refused = false;
+	for(int family : {AF_INET6, AF_INET}){
+		if(!ip.empty() && family != (ip.find(':') == std::string::npos ? AF_INET : AF_INET6)){
+			continue;
+		}
+		sockaddr_storage storage{};
+		auto* v4 = reinterpret_cast<sockaddr_in*>(&storage);
+		auto* v6 = reinterpret_cast<sockaddr_in6*>(&storage);
+		if(family == AF_INET){
+			v4->sin_family = AF_INET;
+			v4->sin_port = htons(port);
+			inet_pton(AF_INET, ip.empty() ? "0.0.0.0" : ip.c_str(), &v4->sin_addr);
+		} else{
+			v6->sin6_family = AF_INET6;
+			v6->sin6_port = htons(port);
+			inet_pton(AF_INET6, ip.empty() ? "::" : ip.c_str(), &v6->sin6_addr);
+		}
+		const auto fd = socket(family, SOCK_DGRAM, IPPROTO_UDP);
+#ifdef _WIN32
+		if(fd == INVALID_SOCKET){
+#else
+		if(fd < 0){
+#endif
+			if(ip.empty()){
+				continue;
+			}
+			throw Error(11, "Unable to validate bind address");
+		}
+		if(family == AF_INET6){
+			const int disabled = 0;
+			setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, reinterpret_cast<const char*>(&disabled), sizeof(disabled));
+		}
+		const int result =
+			bind(fd, reinterpret_cast<sockaddr*>(&storage), family == AF_INET ? sizeof(sockaddr_in) : sizeof(sockaddr_in6));
+#ifdef _WIN32
+		closesocket(fd);
+#else
+		::close(fd);
+#endif
+		// a wildcard falls back to IPv4 when the dual-stack bind fails, like libjuice
+		if(result == 0 || !ip.empty()){
+			return result == 0;
+		}
+		refused = true;
+	}
+	if(refused){
+		return false;
+	}
+	throw Error(11, "Unable to validate bind address");
+}
+
 void validate_bind(const ::rtc::Configuration& config){
-	if(!config.bindAddress){
-		return;
-	}
-	const auto& ip = *config.bindAddress;
-	sockaddr_storage storage{};
-	auto* v4 = reinterpret_cast<sockaddr_in*>(&storage);
-	auto* v6 = reinterpret_cast<sockaddr_in6*>(&storage);
-	int family = ip.find(':') == std::string::npos ? AF_INET : AF_INET6;
-	if(family == AF_INET){
-		v4->sin_family = AF_INET;
-		inet_pton(AF_INET, ip.c_str(), &v4->sin_addr);
-	} else{
-		v6->sin6_family = AF_INET6;
-		inet_pton(AF_INET6, ip.c_str(), &v6->sin6_addr);
-	}
-	const auto fd = socket(family, SOCK_DGRAM, IPPROTO_UDP);
-#ifdef _WIN32
-	if(fd == INVALID_SOCKET){
-		throw Error(11, "Unable to validate bind address");
-	}
-#else
-	if(fd < 0){
-		throw Error(11, "Unable to validate bind address");
-	}
-#endif
-	const int result =
-		bind(fd, reinterpret_cast<sockaddr*>(&storage), family == AF_INET ? sizeof(sockaddr_in) : sizeof(sockaddr_in6));
-#ifdef _WIN32
-	closesocket(fd);
-#else
-	::close(fd);
-#endif
-	if(result != 0){
+	if(config.bindAddress && !udp_bindable(*config.bindAddress, 0)){
 		throw Error(1, "Bind address is unavailable");
+	}
+}
+
+struct MuxPort{
+	std::string bind;
+	size_t peers = 0;
+	std::chrono::steady_clock::time_point released;
+};
+std::mutex muxMutex;
+std::map<uint16_t, MuxPort> muxPorts;
+constexpr auto muxRelease = std::chrono::seconds(1);
+
+// libjuice shares a mux socket by port alone and closes it after the peer, asynchronously
+void claim_mux(const ::rtc::Configuration& config){
+	const uint16_t port = config.portRangeBegin;
+	const std::string bind = config.bindAddress.value_or("");
+	std::unique_lock lock(muxMutex);
+	while(true){
+		auto it = muxPorts.find(port);
+		if(it != muxPorts.end() && it->second.peers > 0){
+			if(it->second.bind != bind){
+				throw Error(1, "ICE UDP mux port is shared with a different bind address");
+			}
+			break;
+		}
+		if(it != muxPorts.end() && it->second.bind != bind && !udp_bindable(it->second.bind, port)){
+			throw Error(1, "ICE UDP mux port is still releasing a different bind address");
+		}
+		if(udp_bindable(bind, port)){
+			break;
+		}
+		// only the last peer's socket, still closing, may hold the same bind briefly
+		if(it == muxPorts.end() || it->second.bind != bind || std::chrono::steady_clock::now() - it->second.released > muxRelease){
+			throw Error(1, "ICE UDP mux port is unavailable");
+		}
+		lock.unlock();
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		lock.lock();
+	}
+	auto& entry = muxPorts[port];
+	entry.bind = bind;
+	++entry.peers;
+}
+
+void release_mux(uint16_t port) noexcept {
+	std::lock_guard lock(muxMutex);
+	auto it = muxPorts.find(port);
+	if(it != muxPorts.end() && it->second.peers > 0 && --it->second.peers == 0){
+		it->second.released = std::chrono::steady_clock::now();
 	}
 }
 }
@@ -171,8 +242,8 @@ void validate_options(const Options& o){
 	if(o.receiveBytes < o.message || o.sendBytes < o.message){
 		throw Error(1, "Queue byte limits must fit maxMessageSize");
 	}
-	if(o.config.enableIceTcp || o.config.enableIceUdpMux){
-		throw Error(1, "ICE TCP and UDP mux are not supported by this backend");
+	if(o.config.enableIceTcp){
+		throw Error(1, "ICE TCP is not supported by this backend");
 	}
 	if(o.config.portRangeBegin <= 1024 && o.config.portRangeBegin != 1024 && o.config.portRangeEnd == 65535){
 		throw Error(1, "Backend cannot enforce this port range");
@@ -190,6 +261,15 @@ void validate_options(const Options& o){
 	}
 	if(stun > 1 || turn > 2){
 		throw Error(1, "Backend supports one STUN and two TURN servers");
+	}
+	if(o.config.enableIceUdpMux){
+		if(o.config.portRangeBegin == 0 || o.config.portRangeBegin != o.config.portRangeEnd){
+			throw Error(1, "ICE UDP mux requires a single fixed port");
+		}
+		// libjuice drops TURN servers in mux mode
+		if(turn > 0){
+			throw Error(1, "ICE UDP mux does not support TURN");
+		}
 	}
 }
 
@@ -212,6 +292,10 @@ std::shared_ptr<Peer> Peer::create(const Options& options){
 	// peer construction acquires the backend token before the bind probe on windows
 	self->backend = std::make_shared<::rtc::PeerConnection>(config);
 	validate_bind(config);
+	if(config.enableIceUdpMux){
+		claim_mux(config);
+		self->muxPort = config.portRangeBegin;
+	}
 	self->candidates.reserve(64);
 	self->pendingChannels.reserve(16);
 	std::weak_ptr<Peer> weak = self;
@@ -521,6 +605,10 @@ void Peer::close(){
 	if(admitted){
 		--active;
 		admitted = false;
+	}
+	if(muxPort){
+		release_mux(muxPort);
+		muxPort = 0;
 	}
 	// backend close may synchronously deliver callbacks
 	for(auto& channel : children){

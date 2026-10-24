@@ -82,6 +82,7 @@ struct Peer : std::enable_shared_from_this<Peer>{
 	std::optional<std::string> localDescription, fingerprint, localAddress, remoteAddress;
 	std::vector<std::pair<std::string, std::string>> candidates;
 	size_t remoteCandidates = 0, sent = 0, received = 0;
+	uint16_t muxPort = 0;
 	std::optional<std::chrono::milliseconds> rtt;
 	bool closed = false, admitted = false, candidateOverflow = false;
 };

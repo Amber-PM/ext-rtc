@@ -35,7 +35,6 @@ rejects(fn() => $p->setRemoteOffer(str_repeat('x',65537)),5);
 rejects(fn() => $p->setRemoteAnswer('invalid'),3);
 rejects(fn() => new Peer(Options::create()->setMaxReceiveQueueSize(1)),1);
 rejects(fn() => new Peer(Options::create()->setIceTcpEnabled(true)),1);
-rejects(fn() => new Peer(Options::create()->setIceUdpMuxEnabled(true)),1);
 rejects(fn() => new Peer(Options::create()->setBindAddress('192.0.2.1')),1);
 rejects(fn() => new Peer(Options::create()->setIceServers(IceServer::turn('localhost',3478,'u','p','tcp'))),1);
 $p->close(); $p->close();

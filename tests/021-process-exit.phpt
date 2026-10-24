@@ -20,7 +20,7 @@ rtc processes exit cleanly while backend work is still in flight
 declare(strict_types=1);
 require __DIR__.'/support/network.php';
 $module=getenv('RTC_TEST_MODULE');check(is_string($module) && is_file($module),'native module path required');
-foreach(['explicit','implicit','unset','channel','rejected','exit'] as $mode){
+foreach(['explicit','implicit','unset','channel','rejected','exit','mux'] as $mode){
 	for($i=0;$i<20;++$i){
 		[$process,$pipes]=startTestProcess([PHP_BINARY,'-n','-d','extension='.$module,'-d','display_errors=stderr','-d','log_errors=0',__DIR__.'/support/exit.php',$mode]);
 		fclose($pipes[0]);$out=$err='';$status=null;
