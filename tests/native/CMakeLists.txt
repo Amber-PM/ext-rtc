@@ -101,6 +101,14 @@ add_test(NAME rtc-receive-budget COMMAND rtc-failures budget)
 add_test(NAME rtc-remote-close COMMAND rtc-failures close)
 set_tests_properties(rtc-receive-budget rtc-remote-close PROPERTIES TIMEOUT 30)
 
+option(RTC_BUILD_BENCH "build the lifecycle and dispatcher benchmarks" OFF)
+if(RTC_BUILD_BENCH AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
+	foreach(name dispatch-latency churn abrupt tput)
+		add_executable(rtc-${name} bench/${name}.cpp)
+		target_link_libraries(rtc-${name} PRIVATE rtc-test-core)
+	endforeach()
+endif()
+
 # backpressure saturation with real frozen remotes
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 	add_executable(rtc-backpressure backpressure.cpp)
