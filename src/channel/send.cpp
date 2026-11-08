@@ -52,12 +52,37 @@ void retire(Queues& q, size_t count, Retired& retired) noexcept {
 		--q.submitted;
 	}
 }
+
+// releases the peer lock around a backend call and publishes that the call is in flight
+struct BackendCall{
+	Peer& peer;
+	explicit BackendCall(Peer& owner) : peer(owner){
+		{
+			std::lock_guard lock(peer.queues->mutex);
+			peer.sendInFlight = true;
+		}
+		peer.operations.unlock();
+		backend_call_begin();
+	}
+	~BackendCall(){
+		backend_call_end();
+		peer.operations.lock();
+		bool closing;
+		{
+			std::lock_guard lock(peer.queues->mutex);
+			peer.sendInFlight = false;
+			closing = peer.queuesClosed;
+		}
+		// close left the purge to this thread, an exception from the call must not skip it
+		if(closing){ peer.purge_sends(); }
+	}
+};
 }
 
 bool Channel::send(std::string_view payload){
 	auto peer = parent.lock();
 	if(!peer){ throw Error(2, "Peer is closed"); }
-	std::lock_guard operation(peer->operations);
+	// the dispatcher may sit inside a backend call for this peer, so no peer wide lock is taken here
 	peer->require_open();
 	std::lock_guard installation(lifecycle);
 	if(closed || !backend){ throw Error(2, "Channel is closed"); }
@@ -67,6 +92,8 @@ bool Channel::send(std::string_view payload){
 	{
 		std::lock_guard lock(queues->mutex);
 		if(closed){ throw Error(2, "Channel is closed"); }
+		// a closed peer has purged its queue and would never drain a late entry
+		if(peer->queuesClosed){ throw Error(2, "Peer is closed"); }
 		const auto footprint = send_cost(payload.size());
 		auto refuse = [&]{
 			saturating_increment(queues->rejected);
@@ -128,6 +155,8 @@ void Peer::dispatch_sends(){
 		size_t handedBytes;
 		{
 			std::lock_guard lock(q.mutex);
+			// one backend call per peer is in flight at most, a second caller leaves the ring to its owner
+			if(sendInFlight){ return; }
 			waiting = q.waiting;
 			handedBytes = q.handedBytes;
 			if(waiting){
@@ -140,7 +169,7 @@ void Peer::dispatch_sends(){
 				credit = entry.credit;
 			}
 		}
-		std::lock_guard installation(channel->lifecycle);
+		std::unique_lock installation(channel->lifecycle);
 		auto transport = channel->backend;
 		if(waiting){
 			if(backend->state() != ::rtc::PeerConnection::State::Connected){
@@ -172,12 +201,28 @@ void Peer::dispatch_sends(){
 		}
 		// callbacks may run synchronously here and only signal native work
 		bool direct = false, cancelled = false;
-		try{
-			direct = transport->send(reinterpret_cast<const std::byte*>(payload->data()), payload->size, credit);
-		} catch(const std::runtime_error& error){
-			// the pinned backend rejects a closed channel before SCTP admission
-			if(!transport->isClosed() || std::string_view(error.what()) != "DataChannel is closed"){ throw; }
-			cancelled = true;
+		{
+			// the backend call can stall, so neither the channel nor the peer lock may span it
+			// close leaves the queue to this thread while the call is in flight
+			installation.unlock();
+			BackendCall call(*this);
+			try{
+				direct = transport->send(reinterpret_cast<const std::byte*>(payload->data()), payload->size, credit);
+			} catch(const std::runtime_error& error){
+				// the pinned backend rejects a closed channel before SCTP admission
+				if(!transport->isClosed() || std::string_view(error.what()) != "DataChannel is closed"){ throw; }
+				cancelled = true;
+			}
+		}
+		bool closing;
+		{
+			std::lock_guard lock(q.mutex);
+			closing = queuesClosed;
+		}
+		// close ran while the backend call was in flight and left the purge to this thread
+		if(closing || !backend){
+			purge_sends();
+			return;
 		}
 		if(!direct && backend->state() != ::rtc::PeerConnection::State::Connected){
 			throw Error(11, "Transport failed during backend admission");
@@ -209,7 +254,9 @@ void Peer::purge_sends() noexcept {
 	if(!queues){ return; }
 	Retired retired;
 	std::lock_guard lock(queues->mutex);
-	// operations excludes the dispatcher and all in-flight backend calls
+	queuesClosed = true;
+	// the dispatcher owns the entry it is handing to the backend and purges once that call returns
+	if(sendInFlight){ return; }
 	queues->submitted = queues->sendMessages;
 	retire(*queues, queues->submitted, retired);
 	queues->waiting = false;

@@ -63,17 +63,21 @@ struct Peer : std::enable_shared_from_this<Peer>{
 	std::array<std::shared_ptr<Channel>, 16> channels;
 	std::vector<std::shared_ptr<Channel>> pendingChannels;
 	std::shared_ptr<Queues> queues;
+	// both guarded by queues->mutex
+	bool sendInFlight = false, queuesClosed = false;
 	void service() noexcept;
 	void dispatch_sends();
 	void purge_sends() noexcept;
 	std::atomic<bool> dispatchStopped{false};
 	Peer* dispatchNext = nullptr;
 	std::shared_ptr<Peer> dispatchHold;
+	bool dispatchRunning = false;
 	std::chrono::steady_clock::time_point dispatchAt;
 	Options options;
 	std::shared_ptr<::rtc::PeerConnection> backend;
 	// remote failure closes recursively, and close takes a final snapshot
 	// callbacks only acquire mutex, never operations
+	// the dispatcher drops operations and the channel lifecycle lock while it sits inside a backend send
 	std::recursive_mutex operations;
 	mutable std::mutex mutex;
 	::rtc::PeerConnection::State state = ::rtc::PeerConnection::State::New;
