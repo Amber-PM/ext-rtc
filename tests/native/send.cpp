@@ -52,9 +52,9 @@ int main(int argc,char** argv){
 		auto a=Peer::create(o),b=Peer::create(o);
 		auto channel=a->create_channel("transmit",{});
 		auto sibling=a->create_channel("sibling",{});
-		wait([&]{a->snapshot();return a->gathering==::rtc::PeerConnection::GatheringState::Complete;});
+		wait([&]{a->snapshot();std::lock_guard lock(a->mutex); return a->gathering == ::rtc::PeerConnection::GatheringState::Complete;});
 		b->remote(*a->localDescription,true);
-		wait([&]{b->snapshot();return b->gathering==::rtc::PeerConnection::GatheringState::Complete;});
+		wait([&]{b->snapshot();std::lock_guard lock(b->mutex); return b->gathering == ::rtc::PeerConnection::GatheringState::Complete;});
 		a->remote(*b->localDescription,false);
 		std::shared_ptr<Channel> incoming, incomingSibling;
 		wait([&]{

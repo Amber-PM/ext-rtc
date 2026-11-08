@@ -43,9 +43,9 @@ int main(){
 		o.protocol = "binary";
 		auto local = a->create_channel("arbitrary", o);
 		std::shared_ptr<Channel> second;
-		wait([&]{ a->snapshot(); return a->gathering == ::rtc::PeerConnection::GatheringState::Complete; });
+		wait([&]{ a->snapshot(); std::lock_guard lock(a->mutex); return a->gathering == ::rtc::PeerConnection::GatheringState::Complete; });
 		b->remote(*a->localDescription, true);
-		wait([&]{ b->snapshot(); return b->gathering == ::rtc::PeerConnection::GatheringState::Complete; });
+		wait([&]{ b->snapshot(); std::lock_guard lock(b->mutex); return b->gathering == ::rtc::PeerConnection::GatheringState::Complete; });
 		a->remote(*b->localDescription, false);
 		std::vector<std::shared_ptr<Channel>> incoming;
 		wait([&]{ auto next = b->poll_channels(); incoming.insert(incoming.end(), next.begin(), next.end()); return incoming.size() == 1 && local->is_open(); });
