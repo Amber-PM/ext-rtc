@@ -138,3 +138,11 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 		set_tests_properties(rtc-dispatcher-start-${mode} PROPERTIES TIMEOUT 60)
 	endforeach()
 endif()
+
+# closing a peer or a channel while the backend delivers incoming channels
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+	add_executable(rtc-attach-close attach-close.cpp)
+	target_link_libraries(rtc-attach-close PRIVATE rtc-test-core)
+	add_test(NAME rtc-attach-close COMMAND rtc-attach-close)
+	set_tests_properties(rtc-attach-close PROPERTIES TIMEOUT 240)
+endif()

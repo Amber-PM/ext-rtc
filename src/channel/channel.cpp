@@ -168,12 +168,16 @@ void Channel::observe_closed() noexcept {
 }
 
 void Channel::close(){
-	std::lock_guard installation(lifecycle);
-	closeRequested = false;
-	observe_closed();
-	auto transport = std::move(backend);
+	std::shared_ptr<::rtc::DataChannel> transport;
+	{
+		std::lock_guard installation(lifecycle);
+		closeRequested = false;
+		observe_closed();
+		transport = std::move(backend);
+		if(transport){ maximum = (std::min)(configuredMaximum, transport->maxMessageSize()); }
+	}
 	if(transport){
-		maximum = (std::min)(configuredMaximum, transport->maxMessageSize());
+		// a backend callback can be inside attach() holding its own callback lock, so none of these calls may run under the channel lock
 		transport->resetCallbacks();
 		transport->close();
 		if(auto p = parent.lock()){ schedule(p); }
