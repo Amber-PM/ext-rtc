@@ -5,3 +5,10 @@ tests/*.log
 tests/*.out
 tests/*.php
 tests/*.sh
+.build-*/
+.cache/
+.venv/
+venv/
+__pycache__/
+*.pyc
+tests/stress/results/

@@ -18,7 +18,7 @@ foreach(array_keys($files) as $file){
 		unset($files[$file]);
 		continue;
 	}
-	if(preg_match('~(^|/)(?:\.build|\.agents|\.superpowers|__pycache__|AGENTS\.md)(/|$)|\.(?:so|dll|exe|o|obj|log|out|diff|pyc|tmp\d*)$~i', $file)){
+	if(preg_match('~(^|/)(?:\.build(?:-[\w.-]+)?|\.cache|\.venv|venv|\.agents|\.superpowers|__pycache__|AGENTS\.md)(/|$)|\.(?:so|dll|exe|o|obj|log|out|diff|pyc|tmp\d*)$~i', $file)){
 		$failures[] = "$file: private or generated artifact in candidate inventory";
 	}
 	if(!preg_match('~\.(?:cpp|c|h|php|phpt|sh|ps1|py|m4|w32|yml|json|cmake)$|(^|/)CMakeLists\.txt$~', $file)){ continue; }
@@ -31,7 +31,7 @@ foreach(array_keys($files) as $file){
 	foreach(explode("\n", str_replace("\r\n", "\n", $text)) as $line => $value){
 		if(preg_match('/[\t ]+$/', $value)){ $failures[] = "$file:" . ($line + 1) . ': trailing whitespace'; }
 	}
-	if(preg_match('~(?:\.build/(?:teardown-fix|teardown-integration)|[A-Z]:[\\/]Users[\\/])~', $text)){
+	if(preg_match('~(?:\.build/(?:teardown-fix|teardown-integration)|[A-Z]:[\\\\/]Users[\\\\/]|/home/[a-z][\w.-]*/|/mnt/[a-z]/Users/)~', $text)){
 		$failures[] = "$file: private workspace dependency";
 	}
 }
