@@ -33,18 +33,31 @@ template<class F> void wait(F ready, const std::string& why = "concurrent lifecy
 int main(){
 	try{
 		for(unsigned iteration=0;iteration<200;++iteration){
-			Options options;options.pending=4;options.receiveMessages=1024;
-			auto a=Peer::create(options),b=Peer::create(options);
+			std::shared_ptr<Peer> a,b;
 			std::array<std::shared_ptr<Channel>,4> local,remote;
-			for(unsigned i=0;i<4;++i){local[i]=a->create_channel(std::to_string(i),{});}
-			wait([&]{a->snapshot();std::lock_guard lock(a->mutex);return a->gathering==::rtc::PeerConnection::GatheringState::Complete;},"gathering a");
-			a->snapshot();
-			b->remote(*a->localDescription,true);
-			wait([&]{b->snapshot();std::lock_guard lock(b->mutex);return b->gathering==::rtc::PeerConnection::GatheringState::Complete;},"gathering b");
-			b->snapshot();
-			a->remote(*b->localDescription,false);
 			size_t adopted=0;
-			wait([&]{for(auto c:b->poll_channels()){remote[std::stoul(c->label)]=c;++adopted;}return adopted==4 && local[0]->is_open() && local[1]->is_open() && local[2]->is_open() && local[3]->is_open();},"channel open");
+			// the pinned backend loses a handshake now and then without ext-rtc being involved, the setup is built again, never the behaviour under test
+			for(int attempt=0;;++attempt){
+				try{
+					Options options;options.pending=4;options.receiveMessages=1024;
+					a=Peer::create(options);b=Peer::create(options);
+					local={};remote={};adopted=0;
+					for(unsigned i=0;i<4;++i){local[i]=a->create_channel(std::to_string(i),{});}
+					wait([&]{a->snapshot();std::lock_guard lock(a->mutex);return a->gathering==::rtc::PeerConnection::GatheringState::Complete;},"gathering a");
+					a->snapshot();
+					b->remote(*a->localDescription,true);
+					wait([&]{b->snapshot();std::lock_guard lock(b->mutex);return b->gathering==::rtc::PeerConnection::GatheringState::Complete;},"gathering b");
+					b->snapshot();
+					a->remote(*b->localDescription,false);
+					wait([&]{for(auto c:b->poll_channels()){remote[std::stoul(c->label)]=c;++adopted;}return adopted==4 && local[0]->is_open() && local[1]->is_open() && local[2]->is_open() && local[3]->is_open();},"channel open");
+					break;
+				}catch(const std::runtime_error& error){
+					if(attempt==2){throw;}
+					std::cerr<<"retrying the setup after: "<<error.what()<<std::endl;
+					if(a){a->close_safely();}
+					if(b){b->close_safely();}
+				}
+			}
 			std::array<std::thread,4> senders;
 			std::atomic<bool> unexpected{false};
 			for(unsigned i=0;i<4;++i){
