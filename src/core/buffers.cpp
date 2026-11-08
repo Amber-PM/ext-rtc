@@ -15,12 +15,14 @@
 
 #include "buffers.h"
 #include "../peer/peer.h"
+#include <algorithm>
 #include <cstring>
+#include <rtc/message.hpp>
 #include <limits>
 
 namespace amber::rtc {
 namespace {
-std::atomic<size_t> managed{0}, budget{0}, overflows{0}, rejected{0};
+std::atomic<size_t> managed{0}, budget{0}, overflows{0}, rejected{0}, sendUsed{0};
 }
 
 void reserve_escrow(size_t cost){
@@ -104,7 +106,35 @@ void Buffer::release(Buffer* buffer) noexcept {
 	}
 }
 
+// the owned copy and the backend escrow are both charged
+size_t send_cost(size_t payload){
+	return 2 * (payload ? payload : 1) + sizeof(Buffer) + sizeof(::rtc::Message) + sizeof(Escrow) + 128;
+}
+
+// queued sends share one cap and above its floor a queue keeps to an equal part of the general pool
+// an empty queue admits one message of any size from the general pool
+// the global budget is checked too, so fixed peer charges and receives always keep headroom
+bool reserve_send(size_t own, size_t cost, bool proven){
+	const bool floor = own + cost <= sendFloor;
+	if(!floor && own != 0 && own + cost > sendGeneral / (std::max)(active_peers(), sharePeers)){ return false; }
+	const size_t limit = floor ? sendBudget : (proven ? sendGeneral : sendGeneral - provenHeadroom);
+	const size_t global = floor ? bufferLimit - bufferLimit / 16 : bufferLimit - bufferLimit / 8;
+	auto used = sendUsed.load();
+	do{
+		const auto spent = budget.load();
+		const bool fits = used <= limit && cost <= limit - used && spent <= global && cost <= global - spent;
+		// a message above any limit goes through only while nothing else is queued
+		if(!fits && !(cost > limit && own == 0 && used == 0)){ return false; }
+	}while(!sendUsed.compare_exchange_weak(used, used + cost));
+	return true;
+}
+
+void release_send(size_t cost) noexcept { sendUsed.fetch_sub(cost); }
+
+size_t send_footprint(){ return sendUsed.load(); }
+
 size_t managed_buffer_bytes(){ return managed.load(); }
+size_t budget_bytes(){ return budget.load(); }
 size_t receive_overflow_count(){ return overflows.load(); }
 size_t send_rejected_count(){ return rejected.load(); }
 void count_overflow(){ saturating_increment(overflows); }

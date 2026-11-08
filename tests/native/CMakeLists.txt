@@ -43,7 +43,7 @@ add_executable(rtc-portable-lifetime portable-lifetime.cpp)
 target_link_libraries(rtc-portable-lifetime PRIVATE rtc-test-core)
 add_test(NAME rtc-portable-lifetime COMMAND rtc-portable-lifetime)
 set_tests_properties(rtc-portable-lifetime PROPERTIES TIMEOUT 45)
-foreach(name lifecycle allocation channels receive send budgets concurrent mux)
+foreach(name lifecycle allocation channels receive send budgets concurrent mux fairshare)
 	add_executable(rtc-${name} ${name}.cpp)
 	target_link_libraries(rtc-${name} PRIVATE rtc-test-core)
 	add_test(NAME rtc-${name} COMMAND rtc-${name})
@@ -92,3 +92,21 @@ target_link_libraries(rtc-failures PRIVATE rtc-test-core)
 add_test(NAME rtc-receive-budget COMMAND rtc-failures budget)
 add_test(NAME rtc-remote-close COMMAND rtc-failures close)
 set_tests_properties(rtc-receive-budget rtc-remote-close PROPERTIES TIMEOUT 30)
+
+# backpressure saturation with real frozen remotes
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+	add_executable(rtc-backpressure backpressure.cpp)
+	target_link_libraries(rtc-backpressure PRIVATE rtc-test-core)
+	add_executable(rtc-send-refusal send-refusal.cpp)
+	target_link_libraries(rtc-send-refusal PRIVATE rtc-test-core)
+	add_test(NAME rtc-send-refusal COMMAND rtc-send-refusal)
+	set_tests_properties(rtc-send-refusal PROPERTIES TIMEOUT 60)
+	# real connected peers whose remotes are frozen, each runs many processes and takes a while
+	add_test(NAME rtc-backpressure-grow COMMAND rtc-backpressure grow 30 120 4 0 16384 6)
+	# 4 established peers alone for 3 s, then 300 frozen peers and 4 newcomers send for 20 s, all with 256 KiB frames
+	# calibration, 3 runs each: before the proven reserve the established peers got 0 msg/s in the window from 2 s to 8 s,
+	# after it they keep 307 to 341 msg/s per peer against 188 to 254 alone, progressShare is 0.25
+	add_test(NAME rtc-backpressure-wide COMMAND rtc-backpressure saturate 300 0 4 0 262144 20 check 4)
+	add_test(NAME rtc-backpressure-shrink COMMAND rtc-backpressure shrink 100 0 4 0 262144 6)
+	set_tests_properties(rtc-backpressure-grow rtc-backpressure-wide rtc-backpressure-shrink PROPERTIES TIMEOUT 240)
+endif()

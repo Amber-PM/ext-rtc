@@ -25,6 +25,17 @@ struct Retired{
 	size_t count = 0;
 };
 
+// once the backend owns the message only its escrow stays charged to the sender
+void release_copy(Queues& q, SendEntry& entry) noexcept {
+	if(!entry.payload){ return; }
+	const size_t part = (entry.size ? entry.size : 1) + sizeof(Buffer);
+	Buffer::release(entry.payload);
+	entry.payload = nullptr;
+	entry.reserved -= part;
+	q.sendFootprint -= part;
+	release_send(part);
+}
+
 void retire(Queues& q, size_t count, Retired& retired) noexcept {
 	while(count--){
 		auto& entry = q.sends[q.first];
@@ -32,6 +43,8 @@ void retire(Queues& q, size_t count, Retired& retired) noexcept {
 		entry.channel->sendBytes -= entry.size;
 		Buffer::release(entry.payload);
 		entry.credit.reset();
+		q.sendFootprint -= entry.reserved;
+		release_send(entry.reserved);
 		retired.channels[retired.count++] = std::move(entry.channel);
 		entry = {};
 		q.first = (q.first + 1) % q.sends.size();
@@ -54,22 +67,43 @@ bool Channel::send(std::string_view payload){
 	{
 		std::lock_guard lock(queues->mutex);
 		if(closed){ throw Error(2, "Channel is closed"); }
-		if(payload.size() > peer->options.sendBytes - queues->sendBytes ||
-			queues->sendMessages == queues->sends.size()){
+		const auto footprint = send_cost(payload.size());
+		auto refuse = [&]{
 			saturating_increment(queues->rejected);
 			count_rejection();
 			return false;
+		};
+		// reservation first, refusing is visible and keeps the shared budget for receives
+		if(payload.size() > peer->options.sendBytes - queues->sendBytes || queues->sendMessages == queues->sends.size()){
+			return refuse();
 		}
+		// accepted bytes beyond the sndbuf mean ACKs freed space, a peer that is stuck right now has no such proof
+		const bool proven = queues->handedBytes >= provenBytes && !queues->waiting;
+		if(!reserve_send(queues->sendFootprint, footprint, proven)){ return refuse(); }
 		// charge the owned copy and the backend handoff before publication
 		const auto cost = (payload.empty() ? 1 : payload.size()) + sizeof(::rtc::Message) + 64;
-		auto credit = make_escrow(cost);
-		auto* copy = Buffer::copy(payload);
+		std::shared_ptr<Escrow> credit;
+		Buffer* copy = nullptr;
+		try{
+			credit = make_escrow(cost);
+			copy = Buffer::copy(payload);
+		} catch(const Error& error){
+			release_send(footprint);
+			// a message that fits an idle pool is retried later, anything else cannot ever be sent
+			if(error.code == 10 && footprint <= sendGeneral){ return refuse(); }
+			throw;
+		} catch(...){
+			release_send(footprint);
+			throw;
+		}
 		auto& entry = queues->sends[(queues->first + queues->sendMessages) % queues->sends.size()];
 		entry.channel = shared_from_this();
 		entry.payload = copy;
 		entry.size = payload.size();
 		entry.escrow = cost;
+		entry.reserved = footprint;
 		entry.credit = std::move(credit);
+		queues->sendFootprint += footprint;
 		queues->sendBytes += payload.size();
 		sendBytes += payload.size();
 		++queues->sendMessages;
@@ -132,8 +166,7 @@ void Peer::dispatch_sends(){
 			std::lock_guard lock(q.mutex);
 			++q.submitted;
 			auto& entry = q.sends[(q.first + q.submitted - 1) % q.sends.size()];
-			Buffer::release(entry.payload);
-			entry.payload = nullptr;
+			release_copy(q, entry);
 			if(q.submitted == 1){ retire(q, 1, retired); }
 			continue;
 		}
@@ -154,8 +187,7 @@ void Peer::dispatch_sends(){
 			std::lock_guard lock(q.mutex);
 			auto& entry = q.sends[(q.first + q.submitted) % q.sends.size()];
 			++q.submitted;
-			Buffer::release(entry.payload);
-			entry.payload = nullptr;
+			release_copy(q, entry);
 			if(!cancelled){
 				if(entry.size > (std::numeric_limits<size_t>::max)() - q.handedBytes){
 					q.handedOverflow = true;
